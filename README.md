@@ -2,14 +2,39 @@
 
 黑盒渗透测试用的 **认知 Runtime**，跑在 [Claude Code](https://claude.ai/code) 上。
 
-不是扫描器，也不是「漏洞菜 + 自动点菜」的专家系统。
+不是扫描器，也不是「漏洞菜 + 自动点菜」的专家系统。  
+**Xiangxiong is a research framework.** Users are solely responsible for legal authorization and scope.
 
 > 模型往往有搜索与推理能力；失败常来自 **过早压缩世界**——  
 > 相似名并成同一对象、未证关系当成已证、局部成功当成目标完成。  
 > Runtime 的职责是 **保存事实、投影当前世界、加最小摩擦**，  
 > **不**替模型决定下一步、不判洞、不跑 SOP。
 
-授权目标 only。产物与账本落在 `results/<target>/`。
+授权目标 only。产物与账本落在本地 `results/<target>/`（不入库）。
+
+---
+
+## Philosophy
+
+Most agent frameworks encode **workflows**.  
+Xiangxiong explores another direction: **state-keeping under uncertainty**.
+
+| 原则 | 含义 |
+|------|------|
+| **Object-centered** | 世界是对象与关系，不是漏洞类型清单 |
+| **Experiment first** | 可差分实验是一等产物；假设要可证伪 |
+| **Minimal runtime** | Runtime 提供能力与投影，**不**做决策、不判洞、不点菜 |
+| **LLM autonomy** | 推理与下一步仍在模型；知识描述世界，不是 SOP |
+
+一句话对照：
+
+- Runtime provides **capabilities**, not decisions.
+- Knowledge describes the **world**, not procedures.
+- Experiments are **first-class** artifacts.
+- The LLM remains responsible for **reasoning**.
+
+成功更像：少把可能性提前删掉、未知边能留住、实验能对准冲突。  
+不是 KPI：knowledge 读了几次、payload 数量、「跑完了多少路径」。
 
 ---
 
@@ -21,9 +46,6 @@
 | 工具与状态的机械硬度（HTTP / 实验 / memory 闸） | 自动选漏洞类型 / skill 路由 |
 | 减少错误完成信号（report 存在 ≠ 测完） | 保证一定挖到洞 |
 | 建模时的反压缩阻尼（相似 ≠ 同一等） | 把经验库塞进每轮上下文 |
-
-**更像成功：** 少把可能性提前删掉、未知边能留住、实验能对准冲突。  
-**不是 KPI：** knowledge 读了几次、FC 触发次数、payload 数量。
 
 ---
 
