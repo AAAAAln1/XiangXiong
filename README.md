@@ -153,8 +153,7 @@ xiangxiong/
 │   └── memory_guard.py
 ├── context/                  # 可选上下文组装（机械投影）
 ├── resources/                # 中性 wordlists 等（非认知层）
-├── console/                  # 可选 Chat UI（纯展示，不控流程）
-└── results/                  # 按 target 的产物
+└── results/                  # 按 target 的产物（本地，不入库）
 ```
 
 ---
@@ -301,13 +300,6 @@ claude
 ```
 
 hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对路径的 `scripts/` / `context/` 入口。
-
-可选 Console（纯展示，不控流程）：
-
-```bash
-# 或 start_console.bat
-cd console && pip install -r requirements.txt && python server.py
-```
 
 **依赖：** Claude Code CLI、Python 3.8+。  
 **范围：** 仅授权目标。作者不对未授权扫描或滥用负责。  
