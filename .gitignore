@@ -61,3 +61,6 @@ console/SETUP.md
 console/SUMMARY.md
 console/VALIDATION.md
 象雄完整工作原理与文件作用说明.md
+
+# research scratch (keep local; product narrative lives in README / ARCHITECTURE)
+experiments/
