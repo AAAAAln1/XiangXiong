@@ -1,0 +1,63 @@
+# secrets / local env
+.benchmark.json
+*.ovpn
+*.log
+cookies.txt
+.env
+.env.*
+
+# python / test cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# artifacts — never publish target evidence
+results/
+
+# active world / local runtime state
+.claude/memory.md
+.claude/memory.md.*
+.claude/settings.local.json
+.observe_state.json
+.observe_state.json.*
+
+# debug / scratch
+.dbg/
+*_tmp_*
+scripts/_tmp_*
+*-local-command-caveat*
+*.tmp
+
+# archives / dumps at repo root
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+
+# ad-hoc local notes / score dumps (not product)
+跑分.txt
+jyt_poc_*
+resultsbench_list.json
+benchmark-*.txt
+
+# dependency trees accidentally under tree
+**/node_modules/
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# local / process notes (not product surface)
+console/FINAL.md
+console/FORBIDDEN.md
+console/INDEX.md
+console/PROJECT.md
+console/QUICKSTART.md
+console/SETUP.md
+console/SUMMARY.md
+console/VALIDATION.md
+象雄完整工作原理与文件作用说明.md
