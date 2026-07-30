@@ -56,3 +56,7 @@ Desktop.ini
 
 # research scratch (keep local; product narrative lives in README / ARCHITECTURE)
 experiments/
+
+# local benchmark and test utilities (keep local; not part of public surface)
+runtime/benchmark_*.py
+runtime/test_*.py

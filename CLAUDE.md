@@ -4,7 +4,7 @@
 
 ## Runtime
 
-产物：`results/<target>/` 下 `responses/`、`experiments/exp-NNN/`、`scripts/`、`report.md`、`lessons.md`、`memory.md`。Benchmark 先 `python runtime/benchmark_vpn.py ensure`。
+产物：`results/<target>/` 下 `responses/`、`experiments/exp-NNN/`、`scripts/`、`report.md`、`lessons.md`、`memory.md`。
 
 - HTTP：`python runtime/http_request.py <target> <curl_args...>`。禁止裸 curl/wget。超时 15s，展示截断 2048。**截断 ≠ 全文** → 查 `results/<target>/responses/`。
 - 非 HTTP：`python runtime/execute.py <target> --timeout 60 --purpose "<why>" --cmd "<command>"`。Windows 复杂命令先写 `results/<target>/scripts/*.py` 再 execute。

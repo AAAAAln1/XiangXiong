@@ -102,7 +102,7 @@
 
 | 目录 | 职责 |
 |------|------|
-| `runtime/` | HTTP、执行、实验、合并 memory、benchmark |
+| `runtime/` | HTTP、执行、实验、合并 memory |
 | `scripts/` | 会话开始 / 观测 / 停止检查 / memory 守卫等 hook |
 | `context/` | 可选上下文组装（工具后触发；只机械加载，不排序、不建议） |
 
@@ -287,7 +287,6 @@ Memory 回答 **「世界是什么状态」**，不是操作日志或待办。
 | 非 HTTP / 脚本 | `python runtime/execute.py <target> --timeout 60 --purpose "…" --cmd "…"`；复杂逻辑先写 `results/<target>/scripts/` |
 | 实验 | `create … --activate --hypothesis "…"`；`close … --status success\|failed\|blocked\|unknown` |
 | Memory | `echo "DELTA:…" \| python runtime/merge.py` |
-| Benchmark | 先 `python runtime/benchmark_vpn.py ensure` |
 
 展示截断 ≠ 磁盘全文：以 `results/<target>/responses/` 为准。
 
