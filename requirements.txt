@@ -1,0 +1,14 @@
+# 象雄（Xiangxiong）运行时依赖
+#
+# Runtime 本体（runtime/ + scripts/ + context/）只使用 Python 标准库，
+# 无第三方 pip 依赖。需要：
+#   - Python 3.8+
+#   - Claude Code CLI（宿主执行环境，见 https://claude.ai/code）
+#
+# 安装（可选，仅验证环境）：
+#   pip install -r requirements.txt
+
+# --- 开发 / 测试（可选） ---
+# 测试脚本为 unittest 风格，可被 pytest 收集运行：
+#   python -m pytest tests/ -q
+pytest>=7.0

@@ -14,6 +14,53 @@
 
 ---
 
+## 快速开始
+
+### 前置条件
+
+- **Python 3.8+**（Runtime 只用标准库，无第三方依赖）
+- **[Claude Code CLI](https://claude.ai/code)**（宿主执行环境）
+
+### 1. 安装
+
+```bash
+git clone https://github.com/AAAAAln1/XiangXiong.git
+cd XiangXiong
+# 可选：安装测试依赖
+pip install -r requirements.txt
+```
+
+### 2. 配置 hooks（一次性）
+
+```bash
+# 复制 hooks 模板为本地配置（settings.local.json 不入库）
+cp .claude/settings.example.json .claude/settings.local.json
+# Windows PowerShell：
+# Copy-Item .claude\settings.example.json .claude\settings.local.json
+```
+
+### 3. 验证安装
+
+```bash
+# 跑回归测试（65 个用例，覆盖解析/投影/边界契约）
+python -m pytest tests/ -q
+```
+
+### 4. 第一次使用
+
+```bash
+# 在项目根目录启动 Claude Code
+claude
+# 输入一个授权目标，例如：
+#   测试 https://example.com/ 这个站点
+```
+
+Agent 启动时 hooks 自动注入世界投影（`[WORLD MODEL]` / `[HYPOTHESES]` / `[RESUME]` 等），工具调用后自动记账与刷新上下文。产物落在 `results/<target>/`。
+
+> **注意：** 测试前确认目标已获授权；`results/`、`.claude/memory.md`、`settings.local.json` 均不入库。
+
+---
+
 ## 设计哲学
 
 多数 Agent 框架在编码 **工作流**。  
@@ -310,18 +357,15 @@ Memory 回答 **「世界是什么状态」**，不是操作日志或待办。
 
 ## 使用
 
+安装、hooks 配置与验证见顶部 **[快速开始](#快速开始)**。
+
 ```bash
 cd xiangxiong
-# 首次：复制 hooks 模板为本地配置（勿提交 settings.local.json）
-cp .claude/settings.example.json .claude/settings.local.json
-# Windows PowerShell：
-# Copy-Item .claude\settings.example.json .claude\settings.local.json
 claude
 ```
 
-hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对路径的 `scripts/` / `context/` 入口。
+hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对路径的 `scripts/` / `context/` 入口（`settings.example.json`）。
 
-**依赖：** Claude Code CLI、Python 3.8+。  
 **范围：** 仅授权目标。作者不对未授权扫描或滥用负责。  
 **不要提交：** `results/`、`.claude/memory.md`、本机 `settings.local.json`、cookie / VPN / `.env`（见 `.gitignore`）。
 
@@ -344,6 +388,7 @@ hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对�
 - **Turn Event Telemetry**：`stop_check.py` 统计 `turn_tool_use_count` / `turns_without_tool_use`，仅被动传感，不接 `decision:block`。
 - **单投影源（Phase 2.0）**：`assembler.py` 收敛为 runtime 适配器，SessionStart 与 PostTool 共享 `format_world_section` / `format_unknown_sections`。
 - **测试体系**：`tests/phase0` ~ `tests/phase2_3` 分阶段回归锁，验证解析无损、投影一致、边界契约。
+- **上手体验**：README 新增「快速开始」章节；新增 `requirements.txt` 明确依赖（Runtime 纯标准库，测试需 pytest）。
 
 ---
 
