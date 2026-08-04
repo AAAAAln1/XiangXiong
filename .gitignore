@@ -22,6 +22,8 @@ results/
 .claude/settings.local.json
 .observe_state.json
 .observe_state.json.*
+.turn_state.json
+.turn_state.json.*
 
 # debug / scratch
 .dbg/

@@ -1,0 +1,33 @@
+{
+  "version": 3,
+  "consecutive_none": 6,
+  "last_round": 12,
+  "memory_offset": 0,
+  "prefix_counts": {
+    "surface": 2,
+    "hypothesis": 4,
+    "vuln": 1
+  },
+  "actions": [
+    {
+      "fp": "HTTP:GET:phase0.example.test/api",
+      "raw": "python runtime/http_request.py ..."
+    },
+    {
+      "fp": "HTTP:GET:phase0.example.test/login",
+      "raw": "python runtime/http_request.py ..."
+    },
+    {
+      "fp": "HTTP:GET:phase0.example.test/login",
+      "raw": "python runtime/http_request.py ..."
+    },
+    {
+      "fp": "HTTP:GET:phase0.example.test/login",
+      "raw": "python runtime/http_request.py ..."
+    },
+    {
+      "fp": "HTTP:GET:phase0.example.test/login",
+      "raw": "python runtime/http_request.py ..."
+    }
+  ]
+}

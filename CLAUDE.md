@@ -48,6 +48,7 @@
 
 - 有意义的观察结果 → `surface:`（状态码只是证据，不是每响应必记）。
 - **与当前模型冲突或解释不了** → 立刻 `hypothesis:`（冲突 + 怎么证伪）。禁止只 surface 就换下一套打法。
+- `hypothesis:` 描述关于对象的未知关系，不描述待执行任务。错：`hypothesis: 测试 SQL 注入`；对：`hypothesis: search 参数是否存在注入`。
 - `hypothesis:` 只记解释不了的关系，禁止 interesting。未做差分禁止对该边 `dead:`。
 - 路径、act、函数名默认**不是**同一对象。
 - **可切换主线；不可因新故事遗忘未闭合 hypothesis。** 关键冲突不得被无视。
@@ -63,5 +64,5 @@
 - **高置信解释成立后，必须作为行动选择的约束，而不仅是账上记录。** 未知可以保留；实验优先用于确认、细化或推翻**当前解释**。写 `vuln:` 后主链未证邻接须挂 `hypothesis:`，禁止只落账后改去扩大未知集合。
 - 路径扫过 ≠ 测完。**探索完成是条件性的，不是永久事实**（report / 局部成功 / 高危链够写报告 ≠ 面已穷尽）。新证据可能使旧假设、旧优先级、旧收口判断失效；也可能使**已充分验证路径的继续投入价值下降**。**未知本身不代表探索价值**；探索优先级应由其是否可能改变当前目标下的重要对象关系、约束或假设决定；仅因未观察而存在的未知可保留，但不应自动获得优先投入。**访问条件、权限边界、可达范围或控制假设**变化时，应重新审视此前被降权的邻接未知，**禁止默认继承旧结论**，重估限于受影响邻接。收口须边界：未验证关系保留 `hypothesis:` 或显式 `dead:`/`counter:`。缺凭据写边界，勿称穷尽。
 - 可复现且有影响 → `vuln:` memory。所有发现（CORS/版本指纹/前端泄露/未授权）均正常记 `surface:`/`vuln:`，不在观察阶段审查赏金价值。
-- 写 `report.md` 时过滤：**一洞一节**（可多洞同文件，禁止只汇总不拆洞）。每节必填：标题、域名、类型、等级、简述（概况+危害；**勿**把 URL/Payload 塞简述）、url/功能点（**完整绝对 URL**：`https://host[:port]/path[?query]`，禁止只写 path；可另附功能导航）、复现（分步 1/2/3…；关键步附完整请求包与响应要点）、证据（`req_xxx`/`exp-NNN`）、修复（可落地：鉴权/校验/配置）。禁止无证据「可能」；禁止只有结论无包。\*\*写report前问：Impact+Exploitability够赏金平台收吗？\*\*不确定时Read `knowledge/bounty_criteria.md`。纯配置/指纹/无利用链信息泄露 → 不写report（memory已记录）；未授权数据/越权/注入/RCE/账户接管/可证明危害 → report。`lessons.md` ≤250 字 + Primary Cause。memory归档到 `results/<target>/memory.md`。
+- 写 `report.md` 时过滤：**一洞一节**（可多洞同文件，禁止只汇总不拆洞）。每节必填：标题、域名、类型、等级、简述（概况+危害；**勿**把 URL/Payload 塞简述）、url/功能点（**完整绝对 URL**：`https://host[:port]/path[?query]`，禁止只写 path；可另附功能导航）、复现（分步 1/2/3…；**每个 HTTP 步附完整原始请求包**：`METHOD /path HTTP/1.1`+`Host`+必要 Header+空行+Body，能直接粘进 Burp Repeater 回放；禁止用 curl 命令/只贴 URL 或 payload 代替；附响应要点）、证据（`req_xxx`/`exp-NNN`）、修复（可落地：鉴权/校验/配置）。禁止无证据「可能」；禁止只有结论无包。\*\*写report前问：Impact+Exploitability够赏金平台收吗？\*\*不确定时Read `knowledge/bounty_criteria.md`。纯配置/指纹/无利用链信息泄露 → 不写report（memory已记录）；未授权数据/越权/注入/RCE/账户接管/可证明危害 → report。`lessons.md` ≤250 字 + Primary Cause。memory归档到 `results/<target>/memory.md`。
 

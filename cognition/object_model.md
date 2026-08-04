@@ -21,6 +21,12 @@
 
 **对象同一性：** 路径 / query act / 函数名 / 近义业务名默认不是同一对象；合并要关系证据。回答「是否测过 X」须同一资源标识（path/method 等），近义名不顶替。
 
+**Object Identity 判断：** 多个 surface 是否属于同一对象，取决于是否共享同一失败机制。
+
+若多个 surface 在同一 Trust Boundary 内、服务同一业务能力、对同类攻击以相同方式失败 → 同一对象的多个入口，不必产生多条 hypothesis。
+
+例：`/user/profile` 和 `/api/user/info` 若受同一认证机制保护 → 同一对象；`/admin/user/info` 需要管理员权限 → 不同对象，不同 Trust Boundary。
+
 对象有邻接（上下游、入口、表示）。发现 A 不自动证明邻居存在。多入口是否同一业务对象、校验是否一致 = unknown。
 
 目录/路由表/规范类 artifact：Known 与 Unknown 同时增加；有 vuln 也不等于未知已空。

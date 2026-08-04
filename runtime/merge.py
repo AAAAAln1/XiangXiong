@@ -34,16 +34,21 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MEMORY_PATH = os.path.join(_PROJECT_ROOT, ".claude", "memory.md")
 RESULTS_DIR = os.path.join(_PROJECT_ROOT, "results")
 OBSERVE_STATE_PATH = os.path.join(_PROJECT_ROOT, ".observe_state.json")
+TURN_STATE_PATH = os.path.join(_PROJECT_ROOT, ".turn_state.json")
+
+try:
+    from .paths import world_active
+except ImportError:
+    from paths import world_active
 
 # 合法前缀白名单。ADD 操作须以此列表中的任一前缀开头，否则拒绝写入。
 # 注意：此列表与 ARCHITECTURE.md §6 + CLAUDE.md 保持同步。
 # 认知对象（6 个）：surface, hypothesis, counter, vuln, cred, dead
 # 目标档案（4 个）：target, tech, port, artifact
 # 特殊标签：future（战略传承，不参与推理）
-# 状态标记（hypothesis 可选）：[observed] [confirmed] [contradicted] [unknown]
+# 状态标记（hypothesis 可选）：[observed] [confirmed] [contradicted] [blocked] [unknown]
 #   例如：hypothesis [observed]: check_token 可能被限制访问
 VALID_PREFIXES = [
     "target:", "tech:", "port:", "artifact:",
@@ -74,18 +79,22 @@ def _is_valid_line(line: str) -> bool:
 
 
 def read_memory() -> list:
-    """读取 memory.md 全部行。"""
-    if not os.path.exists(MEMORY_PATH):
+    """读取 active world memory 全部行（路径经 paths.world_active）。"""
+    path = world_active()
+    if not os.path.exists(path):
         return []
-    with open(MEMORY_PATH, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:
         return f.readlines()
 
 
 def write_memory(lines: list):
-    """写回 memory.md。"""
+    """写回 active world memory（路径经 paths.world_active）。"""
+    path = world_active()
     content = "".join(lines).rstrip("\n") + "\n" if lines else ""
-    os.makedirs(os.path.dirname(MEMORY_PATH), exist_ok=True)
-    with open(MEMORY_PATH, "w", encoding="utf-8") as f:
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         f.write(content)
 
 
@@ -237,8 +246,19 @@ def archive_active_memory(lines: list, old_body: str) -> str:
     return dest
 
 
+def reset_turn_state_on_target_change() -> None:
+    """换 target：机械清零 Turn event telemetry（.turn_state.json）。"""
+    payload = {"version": 1, "turns_without_tool_use": 0}
+    try:
+        with open(TURN_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
 def reset_observe_on_target_change() -> None:
-    """换 target 时清零停滞计数（机械；不解释业务）。"""
+    """换 target 时清零 target-loop 停滞计数 + turn telemetry（机械；不解释业务）。"""
+    reset_turn_state_on_target_change()
     if not os.path.exists(OBSERVE_STATE_PATH):
         return
     try:

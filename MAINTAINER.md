@@ -94,6 +94,49 @@ object_model ≠ domain partition：前者勿错误合并；后者「领域该�
 FC：T1 MUST 投 Index；T3 可再钉同一 Index；T2 不做；正文冷。  
 FC **v0.1 frozen**：默认不加条、不 ontology 进热路径；v0.2 要 hit/miss。验证看：是否改 Experiment、是否减错误闭合、Unknown 是否可实验。
 
+## Section Renderer / Composer Separation
+
+Projection 责任分两层，禁止混合：
+
+- **Renderer**（`format_world_section` / `format_unknown_sections` 等）：只负责「一个 section 怎么展示」；不读业务来源之外的拼装、不知道文档位置。
+- **Composer**（`compile()` / `assemble()` / `_render_world_from_view`）：只负责「各 section 放哪、事件如何组合」；必须保持历史 attention contract（Phase0 金样）不可漂移。
+
+**禁止创建这种 helper：读源数据 + 渲染多个 section + 拼接成 LLM-facing 片段** —— 名字像 projection、实际是隐藏 composer，复用即悄悄改掉段序（Phase 2.0 事故即此）。命名向 `project_xxx()` / `get_world_context()` 靠拢的「大而全」接口一律拒。
+
+其它规则：
+
+- 同一世界数据可以有多个展示（如 SessionStart RECENT 与 PostTool RECENT 窗口不同）。**same data source ≠ same projection contract**；不要因为「都是 recent」顺手统一——统一是又一次 Phase 2.0。
+- 新增 section renderer 可以；**新增 `format_full_xxx_context()` 类聚合函数**不可以（会重建黑盒与隐式顺序）。
+- 共享「section 语义」合理；共享「文档组合顺序」危险。
+
+## Observation Cache 边界（`.pattern_counts.json`）
+
+`results/<target>/.pattern_counts.json` 是 **工具观察缓存**，不是世界状态：
+
+- 只回答「同一响应签名出现过几次」（`(request_sig, response_sig, occurrences)`），**不回答** stable / blocked / saturated / 下一步。
+- 可删、可重建、有界；**不进** merge / world projection / session_start 注意力 / observe 模式。
+- 禁止演化：merge 读它、projection 展示它、session_start 按它改 attention、observe 按它自动切 mode——否则观察缓存会变成**隐藏世界模型**。
+- 实验开关：`XIANGXIONG_OBS_REPEAT=0` 关闭（A/B 对照用）。
+
+## Observation Artifact Contract（物理元数据）
+
+每个被展示的载荷流，tool 首包一阶暴露 `{path, size, truncated}`（预览≠全文）：
+
+- execute：`stdout_*` / `stderr_*`；http：`body_*`（与 `saved`/`length` 并存）。
+- 属 Observation 物理层，**不是** experiment conclusion/status。
+- **不进** world / merge / SessionStart / observe 决策；禁止 should_read / 自动 tail / 重要性。
+- Runtime Minimal = 无认知逻辑 + 记录可观察；≠ 少暴露入口。
+
+## Turn Event Telemetry（`.turn_state.json`）
+
+**Add missing Turn event telemetry** — 不是 idle detection；不解决 Host generation timeout。
+
+- Stop 独占：`turn_tool_use_count` / `turns_without_tool_use`；仅 count==0 时输出两数字。
+- 与 target-loop（`.observe_state` / `consecutive_none` / `stagnation_level`）分离。
+- **禁止**：idle/watch/stuck/level；因无 tool 的 `decision:block`；SessionStart/WORLD/DELTA；改 observe.py。
+- 换 target：`reset_observe_on_target_change` 机械清零 turn state。
+- stop_check 两类职责冻结：contract enforcement vs passive observation；后者不得影响前者。
+
 ## 蒸馏 FC 正文
 
 `你默认/实际/还不知道`。四闸：关系；非 surface 可证；去 Target 仍成立；非清单。映射旧条优先。v0.1 冻结期优先记 miss，不预填 Dependency/Quantity/漏洞菜。

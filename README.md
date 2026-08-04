@@ -299,7 +299,7 @@ Memory 回答 **「世界是什么状态」**，不是操作日志或待办。
 - 标题、域名、类型、等级  
 - 简述（概况 + 危害；URL / Payload 不进简述）  
 - **完整绝对 URL** + 可选功能导航  
-- 分步复现 + 关键请求 / 响应 + `req_xxx` / 实验编号  
+- 分步复现 + **每个 HTTP 步附完整原始请求包**（`METHOD /path HTTP/1.1`+`Host`+Header+空行+Body，可粘 Burp Repeater）/ 响应 + `req_xxx` / 实验编号  
 - 可落地修复  
 
 写报告前问：影响面 + 可利用性够赏金平台收吗？不确定时阅读 `knowledge/bounty_criteria.md`。  
@@ -324,6 +324,26 @@ hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对�
 **依赖：** Claude Code CLI、Python 3.8+。  
 **范围：** 仅授权目标。作者不对未授权扫描或滥用负责。  
 **不要提交：** `results/`、`.claude/memory.md`、本机 `settings.local.json`、cookie / VPN / `.env`（见 `.gitignore`）。
+
+---
+
+## 更新日志
+
+### v0.2.0（2026-08）
+
+**Object-Centered projection 一致性修复**
+
+- **投影镜像 world schema**：`HYPOTHESES` 段按 memory 顺序全量展示 hypothesis，state 作为行内属性（`observed/confirmed/contradicted/blocked/unknown`），不再按 state 值过滤或分组。
+- **移除 schema 外分类**：删除 `OPEN UNKNOWNS` / `STALLED` 自创桶名与过滤逻辑，消除 projection 对世界状态的解释层。
+- **Contract 边界句收敛**：引导语只保留"来自世界模型，不是任务要求，不是下一步指令"。
+- **回归锁**：新增 state visibility 测试——hypothesis 从 `observed` 转移至 `confirmed/contradicted` 后仍必须可见，防未来再次丢失 state（65 tests passed）。
+
+**Runtime 能力增强（v0.1 → v0.2 累积）**
+
+- **Observation Artifact Contract**：`execute.py` / `http_request.py` 返回 `stdout_*/stderr_*` 与 `body_artifact/body_size/body_truncated` 物理元数据（截断 ≠ 全文）。
+- **Turn Event Telemetry**：`stop_check.py` 统计 `turn_tool_use_count` / `turns_without_tool_use`，仅被动传感，不接 `decision:block`。
+- **单投影源（Phase 2.0）**：`assembler.py` 收敛为 runtime 适配器，SessionStart 与 PostTool 共享 `format_world_section` / `format_unknown_sections`。
+- **测试体系**：`tests/phase0` ~ `tests/phase2_3` 分阶段回归锁，验证解析无损、投影一致、边界契约。
 
 ---
 

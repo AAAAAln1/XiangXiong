@@ -1,0 +1,31 @@
+[WORLD MODEL]
+target: phase0.example.test
+
+objects (4):
+  surface: /login form present
+  surface: /api/v1/search endpoint
+  cred: demo cookie session=phase0
+  vuln: reflected xss on /legacy (demo fixture only)
+
+constraints (3):
+  tech: nginx
+  port: 443 https
+  artifact: results/phase0.example.test/responses/req_001.txt
+
+counters (2):
+  counter: /old-admin returned 404 repeatedly
+  dead: /phpmyadmin not reachable
+
+[RECENT EXPERIMENTS]
+  id: exp-001 | closed: true | hypothesis: search q may reflect | action: probe search with marker | observation: status 200 length stable | artifact: responses/req_001.txt | conclusion: no reflection in truncated body | evidence: experiments/exp-001/evidence.md | status: failed
+
+以下关系来自当前世界模型。
+它们不是任务要求，也不是下一步指令。
+
+HYPOTHESES (5):
+  hypothesis: search q parameter may reflect unsanitized
+  hypothesis: admin panel may exist at /admin  [observed]
+  hypothesis: cannot verify auth bypass without credentials  [blocked]
+  hypothesis: /health returns 200 without auth  [confirmed]
+  hypothesis: /debug was not open on first probe  [contradicted]
+

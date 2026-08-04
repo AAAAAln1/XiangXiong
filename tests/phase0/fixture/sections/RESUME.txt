@@ -1,0 +1,4 @@
+[RESUME]
+target: phase0.example.test
+objects: 4 | constraints: 3 | relations: 5 | counters: 2
+

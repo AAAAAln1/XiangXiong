@@ -1,0 +1,40 @@
+{
+  "phase": 0,
+  "protocol": "H0-H15",
+  "purpose": "migration baseline only; no runtime abstraction",
+  "captured_by": "tests/phase0/capture_baseline.py",
+  "workspace_layout_note": "session_start and merge resolved paths relative to their script parents; capture ran in an isolated tree mirroring xiangxiong layout",
+  "memory_sha256": "bdd6f4393ee2858d00f3ebc1bfe294d4c5b44cac0bb6bcb2b2642cef38ea5d31",
+  "observe_state_sha256": "b84e81460066c023e522606db15b01cad4534d21858b0661515cf2832b2e4dcc",
+  "cognition_files": [
+    "object_model.md",
+    "evidence_model.md",
+    "experiment_model.md",
+    "surface_misalignment.md"
+  ],
+  "cognition_sha256": {
+    "object_model.md": "587c36b8c1768257eeb9d9007b732cbfe29114b674ec5475d135c304f3d96c42",
+    "evidence_model.md": "9597ecaa61a82d52e134fcd96a8f922914208605f1cd0f9bce8f0654cdec5bec",
+    "experiment_model.md": "3a606df89d6b388c0de89f92d54c3b7210744ce9b82fdb96c7e7f12955863eff",
+    "surface_misalignment.md": "a24ba31333a8d7c14034f004664e6bccaf0f3b1cdcecae6e2ed3ca6aa223a93d"
+  },
+  "experiments_fingerprint": "1fc8daf6c976576ed3922226531fb20d784d760b0809fc95a22e1f9905efb3b4",
+  "artifacts": {
+    "report.md": false,
+    "lessons.md": false
+  },
+  "expected_stdout_sha256": "29083d2be8074800b1168dba3e4ca8dabf4aedb8b6b9733ac8f43339effef003",
+  "section_sha256": {
+    "COGNITION": "16e5aafb7f8afb11feb41876e8e3ead40704dca073f8d763e8e6ff25af24c5b8",
+    "ANTI-COMPRESSION": "552b3c14f250f5d8fbceb6bb44bd42ef31346193d395c0cfa29601b0b7b92e36",
+    "WORLD": "e60c9e9777cc1f6a5361540de040e4c9e91245d91273d5ad4da79c71a0b9b5f8",
+    "RESUME": "32559d9821311d4716b5a15253c1ff1120fcb18cdd9ad0b54fa9832bd9da0244",
+    "OBSERVE": "91069f16a634d4accc910f439ea676698dc3f3e75ff183142404009bd5e5c4ee",
+    "ARTIFACTS": "0c69961b665b220d1d676d6b619fa0e278e25347fa9b3cd04256542ca6bed617"
+  },
+  "merge_memory_before_sha256": "bdd6f4393ee2858d00f3ebc1bfe294d4c5b44cac0bb6bcb2b2642cef38ea5d31",
+  "merge_memory_after_sha256": "1b38225a0d9cf71f819c0785f7e5e2a94a8452939497d66285deb6f0f991e593",
+  "merge_delta_sha256": "a2884762074d8e57d10d8ce7bd0d2b4ccb0e330287b5c9900d6866f5db4c8733",
+  "python": "3.13.7",
+  "platform": "win32"
+}

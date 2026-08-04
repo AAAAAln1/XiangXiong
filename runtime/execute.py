@@ -99,7 +99,8 @@ def relative_result_path(target: str, path: str) -> str:
     return os.path.relpath(path, target_root).replace("\\", "/")
 
 
-def persist_execution(target: str, metadata: dict, stdout: str, stderr: str) -> str:
+def persist_execution(target: str, metadata: dict, stdout: str, stderr: str) -> dict:
+    """落盘 stdout/stderr/metadata；返回相对 results/<target>/ 的路径（单一来源）。"""
     save_dir = ensure_metadata_dir(target)
     execution_id = metadata["execution_id"]
     stdout_path = os.path.join(save_dir, f"{execution_id}.stdout.txt")
@@ -111,16 +112,24 @@ def persist_execution(target: str, metadata: dict, stdout: str, stderr: str) -> 
     with open(stderr_path, "w", encoding="utf-8", errors="replace") as file:
         file.write(stderr)
 
+    stdout_artifact = relative_result_path(target, stdout_path)
+    stderr_artifact = relative_result_path(target, stderr_path)
+    metadata_artifact = relative_result_path(target, metadata_path)
     metadata["artifacts"] = {
-        "stdout": relative_result_path(target, stdout_path),
-        "stderr": relative_result_path(target, stderr_path),
+        "stdout": stdout_artifact,
+        "stderr": stderr_artifact,
     }
     with open(metadata_path, "w", encoding="utf-8") as file:
         json.dump(metadata, file, ensure_ascii=False, indent=2)
-    return relative_result_path(target, metadata_path)
+    return {
+        "metadata": metadata_artifact,
+        "stdout": stdout_artifact,
+        "stderr": stderr_artifact,
+    }
 
 
 def trim_output(value: str) -> str:
+    """展示截断 only。全文在 artifact；path/size/truncated 由 result 根字段声明。"""
     if len(value) <= MAX_OUTPUT_CHARS:
         return value
     return value[:MAX_OUTPUT_CHARS] + f"\n...[truncated to {MAX_OUTPUT_CHARS} chars]"
@@ -233,10 +242,14 @@ def build_result(args) -> dict:
         "exit_code": execution["exit_code"],
         "reason": execution["reason"],
     })
-    metadata_path = persist_execution(
-        args.target, metadata, execution["stdout"], execution["stderr"]
-    )
+    full_stdout = execution["stdout"] or ""
+    full_stderr = execution["stderr"] or ""
+    paths = persist_execution(args.target, metadata, full_stdout, full_stderr)
+    metadata_path = paths["metadata"]
+    stdout_size = len(full_stdout)
+    stderr_size = len(full_stderr)
 
+    # Observation 物理元数据（一阶）：path/size/truncated。预览≠全文。
     result = {
         "execution_id": execution_id,
         "experiment_id": experiment_id,
@@ -250,8 +263,14 @@ def build_result(args) -> dict:
         "exit_code": execution["exit_code"],
         "reason": execution["reason"],
         "metadata": metadata_path,
-        "stdout": trim_output(execution["stdout"]),
-        "stderr": trim_output(execution["stderr"]),
+        "stdout_artifact": paths["stdout"],
+        "stderr_artifact": paths["stderr"],
+        "stdout_size": stdout_size,
+        "stderr_size": stderr_size,
+        "stdout_truncated": stdout_size > MAX_OUTPUT_CHARS,
+        "stderr_truncated": stderr_size > MAX_OUTPUT_CHARS,
+        "stdout": trim_output(full_stdout),
+        "stderr": trim_output(full_stderr),
     }
 
     if experiment_id:
@@ -260,7 +279,14 @@ def build_result(args) -> dict:
             f"status: {execution['status']}\n"
             f"exit_code: {execution['exit_code']}\n"
             f"duration: {execution['duration']}s\n"
-            f"reason: {execution['reason']}\nmetadata_artifact: {metadata_path}"
+            f"reason: {execution['reason']}\n"
+            f"metadata_artifact: {metadata_path}\n"
+            f"stdout_artifact: {paths['stdout']}\n"
+            f"stderr_artifact: {paths['stderr']}\n"
+            f"stdout_size: {stdout_size}\n"
+            f"stderr_size: {stderr_size}\n"
+            f"stdout_truncated: {str(stdout_size > MAX_OUTPUT_CHARS).lower()}\n"
+            f"stderr_truncated: {str(stderr_size > MAX_OUTPUT_CHARS).lower()}"
         )
         try:
             append_observation(args.target, experiment_id, observation, metadata_path)

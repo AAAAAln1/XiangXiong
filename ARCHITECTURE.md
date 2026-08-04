@@ -106,7 +106,7 @@ Artifacts 与 World State **并列**，禁止 Artifact 反向充当 completion p
 | 漏洞等级 | 严重/高危/中危/低危 |
 | 漏洞简述 | 概况+危害；URL/Payload 不进简述 |
 | 漏洞 url/功能点 | **完整绝对 URL**（`https://host[:port]/path[?query]`），禁止只写 path；可另附功能导航 |
-| 复现步骤 | 分步；关键步含请求包+响应要点+证据指针 |
+| 复现步骤 | 分步；每个 HTTP 步含完整原始请求包（`METHOD /path HTTP/1.1`+`Host`+Header+空行+Body，可粘 Burp Repeater）+响应要点+证据指针 |
 | 修复建议 | 可落地措施，优先对开发友好 |
 
 禁止：只有摘要表、只有「可能」、只有结论无请求包。多洞可同文件，须逐洞拆开。Agent 侧必填约束在 `CLAUDE.md` 收口句，不在此重复 SOP。
