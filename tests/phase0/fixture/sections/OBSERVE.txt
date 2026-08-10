@@ -1,6 +1,0 @@
-[OBSERVE]
-consecutive_none: 6
-same_action_count: 4
-stagnation_level: warning
-last_round: 12
-

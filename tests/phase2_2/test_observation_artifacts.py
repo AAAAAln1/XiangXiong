@@ -94,8 +94,6 @@ class TestHttpObservationArtifacts(unittest.TestCase):
             "error": None,
             "association_error": None,
             "truncated": False,
-            "pattern_key": "",
-            "pattern_occurrences": 0,
         }
         text = http_request.format_output(base)
         self.assertIn("body_artifact: responses/req_001.txt", text)
@@ -116,8 +114,6 @@ class TestHttpObservationArtifacts(unittest.TestCase):
             "error": None,
             "association_error": None,
             "truncated": True,
-            "pattern_key": "",
-            "pattern_occurrences": 0,
         }
         text = http_request.format_output(base)
         self.assertIn("body_truncated: true", text)

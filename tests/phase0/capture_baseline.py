@@ -118,8 +118,8 @@ def build_workspace(ws: Path) -> None:
 
     # Point session_start / merge at this workspace by copying scripts with same relative layout
     shutil.copy2(ROOT / "scripts" / "session_start.py", ws / "scripts" / "session_start.py")
-    shutil.copy2(ROOT / "runtime" / "merge.py", ws / "runtime" / "merge.py")
-    # merge may import nothing else; session_start is standalone
+    for name in ("paths.py", "world.py", "project.py", "merge.py"):
+        shutil.copy2(ROOT / "runtime" / name, ws / "runtime" / name)
 
 
 def capture_stdout(ws: Path) -> str:
@@ -192,12 +192,12 @@ def export_fixture(ws: Path, stdout: str, merge_before: str, merge_after: str, m
     # Section slices for H0 gold (COGNITION / ANTI-COMPRESSION / WORLD / RESUME)
     # WORLD gold = full attention block through unknowns (ends at RESUME),
     # matching Phase0 four-region freeze (COGNITION / ANTI-COMPRESSION / WORLD / RESUME).
+    # v0.3: [OBSERVE] 段已随 stagnation 体系删除。
     sections = {
         "COGNITION": _slice_section(stdout, "[COGNITION]", "[ANTI-COMPRESSION]"),
-        "ANTI-COMPRESSION": _slice_section(stdout, "[ANTI-COMPRESSION]", "[OBSERVE]"),
+        "ANTI-COMPRESSION": _slice_section(stdout, "[ANTI-COMPRESSION]", "[WORLD MODEL]"),
         "WORLD": _slice_section(stdout, "[WORLD MODEL]", "[RESUME]"),
         "RESUME": _slice_section(stdout, "[RESUME]", "[ARTIFACTS]"),
-        "OBSERVE": _slice_section(stdout, "[OBSERVE]", "[WORLD MODEL]"),
         "ARTIFACTS": stdout[stdout.index("[ARTIFACTS]"):] if "[ARTIFACTS]" in stdout else "",
     }
     sec_dir = OUT / "sections"

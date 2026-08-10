@@ -62,3 +62,9 @@ experiments/
 # local benchmark and test utilities (keep local; not part of public surface)
 runtime/benchmark_*.py
 runtime/test_*.py
+
+# local session analysis / scratch debug (keep local; contain local paths & target refs)
+/analyze_sessions.py
+/recount_delta.py
+/test_compile.py
+/test_experiments.py

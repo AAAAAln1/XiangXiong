@@ -16,7 +16,6 @@ http_request.py — 黑盒 HTTP 请求工具（瞎子）。
   python runtime/http_request.py <target> [--experiment-id exp-NNN] <curl_args...>
 """
 
-import hashlib
 import json
 import os
 import re
@@ -24,7 +23,6 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
 
 try:
     from .experiment import append_observation, resolve_experiment_id
@@ -37,12 +35,6 @@ RESPONSES_SUBDIR = "responses"
 MAX_BODY_CHARS = 2048
 CURL_TIMEOUT = 15
 SENSITIVE_HEADERS = {"authorization", "cookie", "proxy-authorization", "set-cookie", "token", "x-api-key", "x-auth-token"}
-
-# Observation repetition cache (tool observation cache only).
-# - discardable / rebuildable
-# - does NOT participate in merge / world projection / memory schema
-PATTERN_COUNTS_FILENAME = ".pattern_counts.json"
-PATTERN_COUNTS_MAX_KEYS = 200
 
 
 def safe_target(target: str) -> str:
@@ -207,89 +199,6 @@ def write_metadata(path: str, metadata: dict) -> None:
         json.dump(metadata, file, ensure_ascii=False, indent=2)
 
 
-# ── Observation repetition (pure facts; no interpretation) ──
-
-def normalized_host_path(url: str) -> tuple:
-    """host + normalized path (query/fragment stripped, trailing slash dropped).
-
-    Observation signature only — never maps to meaning.
-    """
-    try:
-        parts = urlsplit(url if url else "")
-    except ValueError:
-        return "", ""
-    host = parts.netloc or ""
-    path = parts.path or "/"
-    path = re.sub(r"/+", "/", path)
-    if path != "/":
-        path = path.rstrip("/")
-    if not path:
-        path = "/"
-    return host, path
-
-
-def normalized_body_hash(body: str) -> str:
-    """Mechanical body fingerprint: whitespace-collapsed + sha1 short.
-
-    Does NOT extract errno/field names/error types (no business structure).
-    """
-    collapsed = re.sub(r"\s+", "", body or "")
-    return hashlib.sha1(collapsed.encode("utf-8", errors="replace")).hexdigest()[:8]
-
-
-def pattern_counts_path(target: str) -> str:
-    target_root = os.path.join(RESULTS_DIR, safe_target(target))
-    return os.path.join(target_root, PATTERN_COUNTS_FILENAME)
-
-
-def load_pattern_counts(target: str) -> dict:
-    path = pattern_counts_path(target)
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        if not isinstance(data, dict):
-            return {}
-        return data
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def save_pattern_counts(target: str, counts: dict) -> None:
-    path = pattern_counts_path(target)
-    parent = os.path.dirname(path)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as file:
-        json.dump(counts, file, ensure_ascii=False)
-
-
-def record_pattern(target: str, method: str, url: str, status_code: str, body: str) -> tuple:
-    """Increment occurrences for (request_sig, response_sig); return (key, occurrences).
-
-    Facts only: counts how many times the same mechanical signature occurred.
-    Bounded; discardable; never interpreted.
-    Disabled via XIANGXIONG_OBS_REPEAT=0 (A/B experiment control).
-    """
-    if os.environ.get("XIANGXIONG_OBS_REPEAT", "1") == "0":
-        return "", 0
-    host, path = normalized_host_path(url)
-    if not host or not status_code or status_code == "000":
-        return "", 0
-    key = f"{method}:{host}{path}:{status_code}:{normalized_body_hash(body)}"
-    counts = load_pattern_counts(target)
-    occurrences = counts.get(key, 0) + 1
-    counts[key] = occurrences
-    # bounded cache: drop oldest key when exceeding limit
-    if len(counts) > PATTERN_COUNTS_MAX_KEYS:
-        oldest = next(iter(counts), None)
-        if oldest is not None:
-            del counts[oldest]
-    save_pattern_counts(target, counts)
-    return key, occurrences
-
-
 def run_curl(target: str, args: list, experiment_id: str = None) -> dict:
     """执行 curl，保存完整响应 body 与机械执行 metadata。"""
     args = normalize_curl_args(args)
@@ -390,7 +299,6 @@ def run_curl(target: str, args: list, experiment_id: str = None) -> dict:
             )
 
     truncated = len(full_body) > MAX_BODY_CHARS
-    pattern_key, pattern_occurrences = record_pattern(target, method, url, status_code, full_body)
     return {
         "method": method,
         "url": url,
@@ -405,8 +313,6 @@ def run_curl(target: str, args: list, experiment_id: str = None) -> dict:
         "metadata_filename": metadata_filename,
         "error": error,
         "association_error": association_error,
-        "pattern_key": pattern_key,
-        "pattern_occurrences": pattern_occurrences,
     }
 
 
@@ -475,11 +381,6 @@ def format_output(result: dict) -> str:
             f"body_size: {body_size}",
             f"body_truncated: {str(body_truncated).lower()}",
         ]
-        # Pure fact: how many times this mechanical response signature occurred.
-        occurrences = result.get("pattern_occurrences", 0)
-        key = result.get("pattern_key", "")
-        if occurrences >= 2 and key:
-            response_section.append(f"[OBSERVATION REPETITION] key={key} occurrences={occurrences}")
     else:
         response_section = [
             "[RESPONSE]",

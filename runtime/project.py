@@ -46,10 +46,6 @@ ANTI_COMPRESSION_LINES = (
 )
 
 
-def _state_path() -> str:
-    return os.path.join(project_root(), ".observe_state.json")
-
-
 def _results_dir() -> str:
     return os.path.join(project_root(), "results")
 
@@ -90,36 +86,15 @@ def _render_cognition(modules: list) -> str:
     return "\n".join(parts) + "\n"
 
 
-def _load_observe_state() -> dict:
-    path = _state_path()
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if data.get("version", 0) != 3:
-            return {}
-        return data
-    except (json.JSONDecodeError, OSError):
-        return {}
-
-
-def _compute_level(consecutive_none: int, same_count: int) -> str:
-    if consecutive_none >= 15 and same_count >= 10:
-        return "emergency"
-    if consecutive_none >= 9 or same_count >= 7:
-        return "critical"
-    if consecutive_none >= 5 or same_count >= 4:
-        return "warning"
-    return "normal"
-
-
 def _target_safe_name(target: str) -> str:
     return target.replace(":", "_").replace("/", "_").replace("\\", "_")
 
 
 def _load_recent_experiments(target: str, limit: int = 5) -> list:
-    root = os.path.join(_results_dir(), _target_safe_name(target), "experiments")
+    # target may be full description; extract pure domain
+    from merge import target_identity
+    target_id = target_identity(target) if target else target
+    root = os.path.join(_results_dir(), _target_safe_name(target_id), "experiments")
     if not os.path.isdir(root):
         return []
 
@@ -175,6 +150,9 @@ def _shorten(value, limit: int = 240) -> str:
 
 def _format_recent_experiments(target: str) -> str:
     """Former print_recent_experiments body as string (H9)."""
+    if not target:
+        return ""
+    
     experiments = _load_recent_experiments(target)
     if not experiments:
         return ""
@@ -206,6 +184,77 @@ def _format_recent_experiments(target: str) -> str:
             fields.append(f"status: {metadata['status']}")
         if fields:
             lines.append("  " + " | ".join(fields))
+    lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def _format_open_experiments(target: str) -> str:
+    """
+    v0.3.2: OPEN EXPERIMENTS 状态投影（认知持久化验证）。
+    
+    设计原则（严格）：
+    - 只展示未关闭实验状态（有 experiment.json，无 conclusion.md）
+    - 只展示当前 target
+    - 不提醒关闭（无"建议""可能丢失"等引导语）
+    - 不判断生命周期（不评估该不该关闭）
+    - 不阻塞行为（LLM 可以忽略）
+    
+    投影内容：
+    - experiment_id
+    - observations 数量
+    - 最后一个 artifact（若有）
+    - hypothesis（若有）
+    """
+    exp_root = experiments_dir_for_target(target)
+    if not os.path.isdir(exp_root):
+        return ""
+    
+    open_experiments = []
+    for exp_name in sorted(os.listdir(exp_root)):
+        if not exp_name.startswith("exp-"):
+            continue
+        exp_dir = os.path.join(exp_root, exp_name)
+        if not os.path.isdir(exp_dir):
+            continue
+        
+        exp_json = os.path.join(exp_dir, "experiment.json")
+        conclusion = os.path.join(exp_dir, "conclusion.md")
+        
+        # 只展示未关闭（有 json 无 conclusion）
+        if not os.path.exists(exp_json) or os.path.exists(conclusion):
+            continue
+        
+        try:
+            with open(exp_json, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        
+        # 收集状态字段（纯展示）
+        fields = [f"id: {exp_name}"]
+        
+        observations = metadata.get("observations", [])
+        obs_count = len(observations)
+        fields.append(f"observations: {obs_count}")
+        
+        # 最后一个 artifact（若有）
+        if observations and isinstance(observations[-1], dict):
+            last_artifact = observations[-1].get("artifact")
+            if last_artifact:
+                fields.append(f"artifact: {_shorten(last_artifact, 80)}")
+        
+        # hypothesis（若有）
+        hypothesis = metadata.get("hypothesis")
+        if hypothesis:
+            fields.append(f"hypothesis: {_shorten(hypothesis, 120)}")
+        
+        open_experiments.append("  " + " | ".join(fields))
+    
+    if not open_experiments:
+        return ""
+    
+    lines = ["[OPEN EXPERIMENTS]"]
+    lines.extend(open_experiments)
     lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -310,14 +359,17 @@ def format_unknown_sections(view: WorldView) -> str:
 
 def experiments_dir_for_target(target: str) -> str:
     """Shared experiment directory path (no third ad-hoc root)."""
-    return os.path.join(_results_dir(), _target_safe_name(target), "experiments")
+    # target may be full description; extract pure domain
+    from merge import target_identity
+    target_id = target_identity(target) if target else target
+    return os.path.join(_results_dir(), _target_safe_name(target_id), "experiments")
 
 
 def _render_world_from_view(view: WorldView) -> str:
     """
     SessionStart compile() document composer (frozen order).
 
-    WORLD → RECENT EXPERIMENTS → HYPOTHESES → RESUME → ARTIFACTS.
+    WORLD → RECENT EXPERIMENTS → OPEN EXPERIMENTS → HYPOTHESES → RESUME → ARTIFACTS.
     Sections come from shared renderers; only this composer decides order.
     """
     parts: list[str] = [format_world_section(view)]
@@ -326,6 +378,11 @@ def _render_world_from_view(view: WorldView) -> str:
         recent = _format_recent_experiments(view.target)
         if recent:
             parts.append(recent)
+        
+        # v0.3.2: OPEN EXPERIMENTS 状态投影（纯展示，不引导）
+        open_exps = _format_open_experiments(view.target)
+        if open_exps:
+            parts.append(open_exps)
 
     unknowns = format_unknown_sections(view)
     if unknowns:
@@ -375,6 +432,8 @@ def compile() -> str:
 
     No parameters (H0). No host chat streams (H8). No new semantics (H9).
     Single memory extract: world.parse only.
+    
+    v0.3.2: 追加 RECENT EXPERIMENTS 和 OPEN EXPERIMENTS 状态投影。
     """
     root = project_root()
     parts: list[str] = []
@@ -385,32 +444,6 @@ def compile() -> str:
     parts.append("\n")
     parts.append(_render_anti_compression())
     parts.append("\n")
-
-    state = _load_observe_state()
-    cn = state.get("consecutive_none", 0)
-    last_round = state.get("last_round", 0)
-
-    actions = state.get("actions", [])
-    same_count = 0
-    if actions:
-        last_fp = actions[-1]["fp"]
-        for a in reversed(actions):
-            if a["fp"] == last_fp:
-                same_count += 1
-            else:
-                break
-
-    level = _compute_level(cn, same_count)
-
-    observe_block = (
-        "[OBSERVE]\n"
-        f"consecutive_none: {cn}\n"
-        f"same_action_count: {same_count}\n"
-        f"stagnation_level: {level}\n"
-        f"last_round: {last_round}\n"
-        "\n"
-    )
-    parts.append(observe_block)
 
     view = world_parse(_read_memory_lines())
     parts.append(_render_world_from_view(view))

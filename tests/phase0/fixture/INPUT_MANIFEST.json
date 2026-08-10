@@ -23,13 +23,12 @@
     "report.md": false,
     "lessons.md": false
   },
-  "expected_stdout_sha256": "29083d2be8074800b1168dba3e4ca8dabf4aedb8b6b9733ac8f43339effef003",
+  "expected_stdout_sha256": "64c099361f9cf4c3b66b7ff2c237b5c1fb116c4ee751849e343b832d93e63907",
   "section_sha256": {
     "COGNITION": "16e5aafb7f8afb11feb41876e8e3ead40704dca073f8d763e8e6ff25af24c5b8",
     "ANTI-COMPRESSION": "552b3c14f250f5d8fbceb6bb44bd42ef31346193d395c0cfa29601b0b7b92e36",
-    "WORLD": "e60c9e9777cc1f6a5361540de040e4c9e91245d91273d5ad4da79c71a0b9b5f8",
+    "WORLD": "e85015711e806eb2616e6242068485e3d9c438d2f4bfdde8a4e6580ce70ada7b",
     "RESUME": "32559d9821311d4716b5a15253c1ff1120fcb18cdd9ad0b54fa9832bd9da0244",
-    "OBSERVE": "91069f16a634d4accc910f439ea676698dc3f3e75ff183142404009bd5e5c4ee",
     "ARTIFACTS": "0c69961b665b220d1d676d6b619fa0e278e25347fa9b3cd04256542ca6bed617"
   },
   "merge_memory_before_sha256": "bdd6f4393ee2858d00f3ebc1bfe294d4c5b44cac0bb6bcb2b2642cef38ea5d31",

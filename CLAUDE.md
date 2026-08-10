@@ -8,7 +8,7 @@
 
 - HTTP：`python runtime/http_request.py <target> <curl_args...>`。禁止裸 curl/wget。超时 15s，展示截断 2048。**截断 ≠ 全文** → 查 `results/<target>/responses/`。
 - 非 HTTP：`python runtime/execute.py <target> --timeout 60 --purpose "<why>" --cmd "<command>"`。Windows 复杂命令先写 `results/<target>/scripts/*.py` 再 execute。
-- 实验：`create ... --activate --hypothesis "..."`；`close ... --conclusion "..." --status success|failed|blocked|unknown`。探索单请求可先不 create。
+- 实验：`create ... --activate --hypothesis "..."`；`close ... --conclusion "..." --status success|failed|blocked|unknown --memory-update '{"text":"探索后的世界变化","status":"confirmed","evidence":["req_747"]}'`。**close 时写 `--memory-update`：text 是探索后的结论（非 create 旧假设），Runtime 机械写回 memory 的 `hypothesis [状态]` 行 + 证据行，无需再手写 DELTA。** 探索单请求可先不 create。
 - memory：禁止直接 Write。`echo "DELTA:\n..." | python runtime/merge.py`。每条 <3 行，一次 ≤15 行。前缀：`target:` `tech:` `port:` `artifact:` `surface:` `vuln:` `cred:` `hypothesis:` `counter:` `dead:`（**记账通道，不是每步填表**；有观察/冲突/结论才写）。详见下文"记账"节。
 - 换目标：DELTA 写新 `target:` 即可（merge archive 旧 world 并清空热 memory）。禁止叠多站。
 - 路径枚举：`resources/wordlists/` 小表限流；命中只 `surface:`。
@@ -18,6 +18,8 @@
 每轮写 **一条 DELTA**，禁止累积憋大改。通过 stdin 走 `merge.py`（拒绝重复、边界外条目、敏感 prefix），禁止裸 Write/Edit memory。
 
 **前缀**：`surface` / `tech` / `port` / `cred` / `artifact` / `hypothesis` / `counter` / `dead` / `vuln`。`hypothesis:` 可选状态标记：`[observed]`（已假设未验证）、`[confirmed]`（实验结果支持假设）、`[contradicted]`（存在证据证明假设不成立）、`[blocked]`（无法获得验证条件如缺账号/权限/环境）。状态来自验证结果，非猜测。写法：`hypothesis [observed]: ...` 或 `hypothesis: ...`（无状态）。
+
+**结论 vs 事实**：`surface:` 只记对象存在性/技术事实（如"首页是 Vue SPA"、"接口存在"）。**越权/绕过/泄露/否定等探索结论必须用 `hypothesis [状态]` / `vuln:` / `counter:` 表达，并带 `req_`/`exp-` 证据编号**——merge 会对无证据引用的 `[confirmed]`/`[contradicted]`/`vuln:`/`counter:` 打 WARN；带证据的结论才能被后续会话复核与报告引用。
 
 **状态语义**：
 
@@ -64,5 +66,5 @@
 - **高置信解释成立后，必须作为行动选择的约束，而不仅是账上记录。** 未知可以保留；实验优先用于确认、细化或推翻**当前解释**。写 `vuln:` 后主链未证邻接须挂 `hypothesis:`，禁止只落账后改去扩大未知集合。
 - 路径扫过 ≠ 测完。**探索完成是条件性的，不是永久事实**（report / 局部成功 / 高危链够写报告 ≠ 面已穷尽）。新证据可能使旧假设、旧优先级、旧收口判断失效；也可能使**已充分验证路径的继续投入价值下降**。**未知本身不代表探索价值**；探索优先级应由其是否可能改变当前目标下的重要对象关系、约束或假设决定；仅因未观察而存在的未知可保留，但不应自动获得优先投入。**访问条件、权限边界、可达范围或控制假设**变化时，应重新审视此前被降权的邻接未知，**禁止默认继承旧结论**，重估限于受影响邻接。收口须边界：未验证关系保留 `hypothesis:` 或显式 `dead:`/`counter:`。缺凭据写边界，勿称穷尽。
 - 可复现且有影响 → `vuln:` memory。所有发现（CORS/版本指纹/前端泄露/未授权）均正常记 `surface:`/`vuln:`，不在观察阶段审查赏金价值。
-- 写 `report.md` 时过滤：**一洞一节**（可多洞同文件，禁止只汇总不拆洞）。每节必填：标题、域名、类型、等级、简述（概况+危害；**勿**把 URL/Payload 塞简述）、url/功能点（**完整绝对 URL**：`https://host[:port]/path[?query]`，禁止只写 path；可另附功能导航）、复现（分步 1/2/3…；**每个 HTTP 步附完整原始请求包**：`METHOD /path HTTP/1.1`+`Host`+必要 Header+空行+Body，能直接粘进 Burp Repeater 回放；禁止用 curl 命令/只贴 URL 或 payload 代替；附响应要点）、证据（`req_xxx`/`exp-NNN`）、修复（可落地：鉴权/校验/配置）。禁止无证据「可能」；禁止只有结论无包。\*\*写report前问：Impact+Exploitability够赏金平台收吗？\*\*不确定时Read `knowledge/bounty_criteria.md`。纯配置/指纹/无利用链信息泄露 → 不写report（memory已记录）；未授权数据/越权/注入/RCE/账户接管/可证明危害 → report。`lessons.md` ≤250 字 + Primary Cause。memory归档到 `results/<target>/memory.md`。
+- 写 `report.md` 时过滤：**一洞一节**（可多洞同文件，禁止只汇总不拆洞）。每节必填：标题、域名、类型、等级、简述（概况+危害；**勿**把 URL/Payload 塞简述）、url/功能点（**完整绝对 URL**：`https://host[:port]/path[?query]`，禁止只写 path；可另附功能导航）、复现（分步 1/2/3…；**每个 HTTP 步附完整原始请求包**：`METHOD /path HTTP/1.1`+`Host`+必要 Header+空行+Body，能直接粘进 Burp Repeater 回放；禁止用 curl 命令/只贴 URL 或 payload 代替；附响应要点）、证据（`req_xxx`/`exp-NNN`）、修复（可落地：鉴权/校验/配置）。禁止无证据「可能」；禁止只有结论无包。**写report前必须 Read `knowledge/bounty_criteria.md`，对照边界案例表逐洞过滤**；不得凭类型名称自判（CORS/信息泄露/版本指纹默认不进report，除非有明确利用链）。纯配置/指纹/无利用链信息泄露/已鉴权读CORS → 不写report（memory已记录）；未授权数据/越权/注入/RCE/账户接管/可证明危害 → report。`lessons.md` ≤250 字 + Primary Cause。memory归档到 `results/<target>/memory.md`。
 

@@ -16,6 +16,15 @@ RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 EXPERIMENT_ID_PATTERN = re.compile(r"^exp-\d{3,}$")
 FINAL_STATUSES = {"success", "failed", "blocked", "unknown"}
 
+# 实验最终状态 → memory hypothesis 行内状态（机械映射，语义由 LLM 的 --status 决定）
+MEMORY_STATUS_MAP = {
+    "success": "confirmed",
+    "failed": "contradicted",
+    "blocked": "blocked",
+    "unknown": "observed",
+}
+VALID_MEMORY_STATES = {"confirmed", "contradicted", "blocked", "observed"}
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -204,11 +213,133 @@ def append_observation(
     }
 
 
+def _load_merge_module():
+    """按需加载 merge 模块（与 assemble 相同的导入回退模式，无循环依赖）。"""
+    try:
+        from runtime import merge  # noqa: F401
+        return merge
+    except ImportError:
+        runtime_dir = os.path.join(PROJECT_ROOT, "runtime")
+        if runtime_dir not in sys.path:
+            sys.path.insert(0, runtime_dir)
+        import merge  # noqa: F401
+        return merge
+
+
+def _parse_memory_update(raw: str):
+    """解析 --memory-update JSON；非法输入返回 None（不阻断 close）。"""
+    try:
+        value = json.loads(raw)
+        if isinstance(value, dict):
+            return value
+    except (json.JSONDecodeError, TypeError):
+        pass
+    print(f"[experiment] WARN --memory-update 非合法 JSON: {str(raw)[:80]}", file=sys.stderr)
+    return None
+
+
+def _sync_memory(
+    target: str,
+    experiment_id: str,
+    status: str,
+    memory_update: dict,
+    artifacts: list,
+) -> dict | None:
+    """close 后把 LLM 显式声明的探索结果机械写回 memory。
+
+    Runtime 只做三件事：
+      1. target 校验（不一致 → 写 results/<safe>/memory.md 归档，不污染 active）
+      2. 查重 / 替换（同 text 行已存在 → 更新状态；否则 ADD）
+      3. 写入 memory
+    禁止：从 conclusion 抽取语义、判断漏洞类型、自动生成关系。
+
+    memory_update 结构（由 LLM 提供，见 --memory-update）：
+      {"text": "<探索后的世界变化>", "status": "confirmed", "evidence": ["req_747"]}
+    text 是探索后的结论（不是 create 时的探索起点假设）。
+    status 缺省用实验最终状态映射；evidence 缺省用实验观察里登记的 artifact。
+    """
+    if not memory_update:
+        return None
+    text = (memory_update.get("text") or "").strip()
+    if not text:
+        print("[experiment] WARN --memory-update 缺少 text，跳过 memory 同步", file=sys.stderr)
+        return None
+
+    state = memory_update.get("status") or MEMORY_STATUS_MAP.get(status, "observed")
+    if state not in VALID_MEMORY_STATES:
+        state = "observed"
+
+    evidence = memory_update.get("evidence") or artifacts or []
+    if isinstance(evidence, str):
+        evidence = [evidence]
+    evidence = [str(e).strip() for e in evidence if str(e).strip()]
+
+    merge = _load_merge_module()
+    lines = merge.read_memory()
+
+    active_body = merge.extract_active_target(lines) if hasattr(merge, "extract_active_target") else ""
+    active_id = merge.target_identity(active_body) if active_body else ""
+    target_id = merge.target_identity(target)
+
+    # 1) target 校验：与 active 不一致 → 落到该 target 归档文件
+    dest = None
+    if active_id and target_id and active_id != target_id:
+        safe = merge.target_safe_name(target)
+        dest = os.path.join(RESULTS_DIR, safe, "memory.md")
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        if os.path.exists(dest):
+            with open(dest, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        else:
+            lines = []
+
+    # 2) 查重 / 替换：同 text 的 hypothesis 行已存在 → 替换状态；否则 ADD
+    hypothesis_line = f"hypothesis [{state}]: {text}"
+    replaced = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("hypothesis [") and "]:" in stripped:
+            content = stripped.split("]:", 1)[1].strip()
+            if content == text:
+                lines[i] = hypothesis_line + "\n"
+                replaced = True
+                break
+    if not replaced:
+        lines = merge.add_line(lines, hypothesis_line)
+
+    # evidence 引用：已有含本实验编号的 artifact 行 → 替换；否则 ADD
+    if evidence:
+        artifact_line = "artifact: " + experiment_id + "; " + ", ".join(evidence)
+        replaced_art = False
+        for i, line in enumerate(lines):
+            if line.strip().startswith("artifact:") and experiment_id in line:
+                lines[i] = artifact_line + "\n"
+                replaced_art = True
+                break
+        if not replaced_art:
+            lines = merge.add_line(lines, artifact_line)
+
+    # 3) 写入
+    if dest is not None:
+        with open(dest, "w", encoding="utf-8") as f:
+            f.write("".join(lines))
+    else:
+        merge.write_memory(lines)
+
+    return {
+        "memory_synced": True,
+        "line": hypothesis_line,
+        "evidence_count": len(evidence),
+        "written_to": "active" if dest is None else "archive",
+    }
+
+
 def close_experiment(
     target: str,
     experiment_id: str = None,
     conclusion: str = None,
     status: str = "unknown",
+    memory_update: dict = None,
 ) -> dict:
     if status not in FINAL_STATUSES:
         raise ValueError(f"status 必须是 {', '.join(sorted(FINAL_STATUSES))} 之一")
@@ -239,12 +370,15 @@ def close_experiment(
             for artifact in artifacts:
                 file.write(f"- {artifact}\n")
 
+    memory_sync = _sync_memory(target, experiment_id, status, memory_update, artifacts)
+
     return {
         "experiment_id": experiment_id,
         "status": status,
         "closed": True,
         "evidence": relative_path(target, evidence_path),
         "artifact_count": len(artifacts),
+        "memory_sync": memory_sync,
     }
 
 
@@ -282,6 +416,13 @@ def main() -> None:
     close.add_argument("experiment_id", nargs="?")
     close.add_argument("--conclusion")
     close.add_argument("--status", choices=sorted(FINAL_STATUSES), default="unknown")
+    close.add_argument(
+        "--memory-update",
+        type=_parse_memory_update,
+        metavar='{"text": "...", "status": "confirmed", "evidence": ["req_747"]}',
+        help="close 后机械写回 memory 的探索结果（JSON）。text=结论；status=confirmed/"
+        "contradicted/blocked/observed（缺省由 --status 映射）；evidence=证据编号数组",
+    )
 
     args = parser.parse_args()
     if args.command == "create":
@@ -300,7 +441,13 @@ def main() -> None:
     elif args.command == "append":
         result = append_observation(args.target, args.experiment_id, args.observation, args.artifact)
     else:
-        result = close_experiment(args.target, args.experiment_id, args.conclusion, args.status)
+        result = close_experiment(
+            args.target,
+            args.experiment_id,
+            args.conclusion,
+            args.status,
+            getattr(args, "memory_update", None),
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

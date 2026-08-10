@@ -7,8 +7,8 @@
 
 > 模型往往有搜索与推理能力；失败常来自 **过早压缩世界**——  
 > 相似名并成同一对象、未证关系当成已证、局部成功当成目标完成。  
-> Runtime 的职责是 **保存事实、投影当前世界、加最小摩擦**，  
-> **不**替模型决定下一步、不判洞、不跑 SOP。
+> Runtime 的职责是 **持久化 LLM 的认知资产**（结论 + 状态 + 证据编号），  
+> **不**替模型决定下一步、不判洞、不跑 SOP、不记录事件日志。
 
 仅限授权目标。产物与账本在本地 `results/<target>/`（**不入库**）。
 
@@ -42,7 +42,7 @@ cp .claude/settings.example.json .claude/settings.local.json
 ### 3. 验证安装
 
 ```bash
-# 跑回归测试（65 个用例，覆盖解析/投影/边界契约）
+# 跑回归测试（25 个用例，覆盖解析/投影/记账/证据绑定契约）
 python -m pytest tests/ -q
 ```
 
@@ -55,7 +55,7 @@ claude
 #   测试 https://example.com/ 这个站点
 ```
 
-Agent 启动时 hooks 自动注入世界投影（`[WORLD MODEL]` / `[HYPOTHESES]` / `[RESUME]` 等），工具调用后自动记账与刷新上下文。产物落在 `results/<target>/`。
+Agent 启动时 hooks 注入结论账本投影（`[WORLD MODEL]` / `[HYPOTHESES]` / `[RESUME]` 等），探索中通过 `merge.py` 合并记账，下次会话开始投影最新账本。产物落在 `results/<target>/`。
 
 > **注意：** 测试前确认目标已获授权；`results/`、`.claude/memory.md`、`settings.local.json` 均不入库。
 
@@ -64,14 +64,14 @@ Agent 启动时 hooks 自动注入世界投影（`[WORLD MODEL]` / `[HYPOTHESES]
 ## 设计哲学
 
 多数 Agent 框架在编码 **工作流**。  
-象雄探索的是另一条路：在不确定环境里 **保住世界状态**。
+象雄探索的是另一条路：在不确定环境里 **不让 LLM 思考过的结论丢失**。
 
 | 原则 | 含义 |
 |------|------|
-| **以对象为中心** | 世界是对象与关系，不是漏洞类型清单 |
-| **实验优先** | 可差分实验是一等产物；假设要可证伪 |
-| **最小 Runtime** | Runtime 提供能力与投影，**不**做决策、不判洞、不点菜 |
-| **模型自主推理** | 下一步仍在模型；知识描述世界，不是操作手册 |
+| **认知持久化** | Runtime 保证 LLM 的结论 / 状态 / 证据编号不丢失；对象关系判断保留在模型上下文 |
+| **实验优先** | 可差分实验是一等产物；`close` 自动把结论写回账本 |
+| **最小 Runtime** | 只做执行、落盘、记账、单次投影——不判洞、不选下一步、不记事件日志 |
+| **模型自主推理** | 下一步仍在模型；Runtime 不引导、不打断、不干预停滞 |
 
 对照普通 Agent：
 
@@ -91,8 +91,9 @@ Agent 启动时 hooks 自动注入世界投影（`[WORLD MODEL]` / `[HYPOTHESES]
 - 知识描述 **世界**，不描述 **流程**
 - 实验是 **一等产物**
 - **推理责任** 仍在大模型
+- 账本存 **结论**，不存 **日志**
 
-**更像成功：** 少把可能性提前删掉、未知边能留住、实验能对准冲突。  
+**更像成功：** 少把可能性提前删掉、未知边能留住、实验能对准冲突、结论能跨会话恢复。  
 **不是 KPI：** 知识文件读了几次、payload 数量、「路径扫了多少」。
 
 ---
@@ -104,7 +105,7 @@ Agent 启动时 hooks 自动注入世界投影（`[WORLD MODEL]` / `[HYPOTHESES]
 | 上下文里「当前世界」是什么（对象、未知、反证、实验） | 替你规划整条渗透路径 |
 | 工具与状态的机械硬度（HTTP / 实验 / memory 闸） | 自动选漏洞类型 / 技能路由 |
 | 减少错误完成信号（有报告 ≠ 测完） | 保证一定挖到洞 |
-| 建模时的反压缩阻尼（相似 ≠ 同一等） | 把经验库塞进每轮上下文 |
+| 长会话 / 中断后认知可恢复（结论账本 + 证据引用可解析） | 把经验库塞进每轮上下文 |
 
 ---
 
@@ -115,7 +116,7 @@ Agent 启动时 hooks 自动注入世界投影（`[WORLD MODEL]` / `[HYPOTHESES]
 ```text
 契约 Contract     ← CLAUDE.md + cognition/*.md
 知识 Knowledge    ← knowledge/*.md
-运行时 Runtime    ← runtime/ + scripts/ + context/（含会话开始投影）
+运行时 Runtime    ← runtime/ + scripts/（执行 / 记账 / 会话开始投影）
 产物 Artifacts    ← results/
 ```
 
@@ -150,14 +151,13 @@ Agent 启动时 hooks 自动注入世界投影（`[WORLD MODEL]` / `[HYPOTHESES]
 | 目录 | 职责 |
 |------|------|
 | `runtime/` | HTTP、执行、实验、合并 memory |
-| `scripts/` | 会话开始 / 观测 / 停止检查 / memory 守卫等 hook |
-| `context/` | 可选上下文组装（工具后触发；只机械加载，不排序、不建议） |
+| `scripts/` | 会话开始投影 / memory 守卫等 hook |
 
 原则：
 
-- 只做 IO、状态、有界投影；
-- **不**判断漏洞、**不**选下一步、**不**按关键词加载知识；
-- 可以改变「模型当前看见什么」，不能替模型思考。
+- 只做 IO、状态、单次投影与记账；
+- **不**判断漏洞、**不**选下一步、**不**按关键词加载知识、**不**记录事件日志；
+- 保证「LLM 判定过的结论被保存、引用可恢复、目标一致」，不干预 LLM 的探索过程。
 
 ### 产物（Artifacts）
 
@@ -205,12 +205,10 @@ xiangxiong/
 │   ├── experiment.py
 │   ├── merge.py
 │   └── …
-├── scripts/                  # 会话开始等 hook
-│   ├── session_start.py
-│   ├── observe.py
-│   ├── stop_check.py
-│   └── memory_guard.py
-├── context/                  # 可选上下文组装（机械投影）
+├── scripts/                  # hooks + 验证工具
+│   ├── session_start.py      # SessionStart 单次投影
+│   ├── memory_guard.py       # 防裸写热 memory
+│   └── validate_persistence.py  # 离线认知持久化验证
 ├── resources/                # 中性词表等（非认知层）
 └── results/                  # 按目标的产物（本地，不入库）
 ```
@@ -231,10 +229,10 @@ xiangxiong/
 |----|------|
 | `[COGNITION]` | 固定四个 cognition 文件；单文件 / 总长有上限 |
 | `[ANTI-COMPRESSION]` | **固定 6 行**（见下）；**不**读 `false_closures.md` |
-| `[OBSERVE]` | 连续无产出、同动作次数、停滞等级 |
-| `[WORLD MODEL]` | 对象 / 约束 / 反证 → 实验 → 关系殿后 |
+| `[WORLD MODEL]` | 结论账本（vuln / hypothesis / counter / dead + 证据编号） |
+| `[OPEN EXPERIMENTS]` | 当前 target 未关闭实验状态（id / observations / artifacts / hypothesis）；纯展示，不提醒关闭 |
 | `[RECENT EXPERIMENTS]` | 当前目标最近实验摘要 |
-| `[RESUME]` | **是否具备恢复上下文的投影资格**（有目标且世界桶非空）——**不是**「继续 / 停止」判决 |
+| `[RESUME]` | **是否具备恢复上下文的投影资格**（有目标且账本非空）——**不是**「继续 / 停止」判决 |
 | `[ARTIFACTS]` | 磁盘上是否有 `report.md` / `lessons.md` |
 
 ### 3. 其它 hooks
@@ -242,9 +240,8 @@ xiangxiong/
 | 时机 | 脚本 | 作用 |
 |------|------|------|
 | 写文件前 | `memory_guard.py` | 禁止直接改热 memory |
-| Bash 之后 | `observe.py` | 停滞计数（传感器，不决策） |
-| 轮次结束 | `stop_check.py` | 投影停滞等级；不强制继续 |
-| Bash 之后 | `context/assembler.py` | 可选：机械重投影世界（不排序、不建议） |
+
+v0.3 起**没有** PostToolUse / Stop hook：工具调用后不重投影、不记录停滞、不干预轮次。世界更新完全由「合并记账 → 下次 SessionStart 投影」驱动。
 
 ### 4. `knowledge/` 默认不加载
 
@@ -260,7 +257,7 @@ xiangxiong/
 
 现规则：
 
-- 是否投影恢复上下文，**只看**「有目标 + memory 里仍有世界状态」；
+- 是否投影恢复上下文，**只看**「有目标 + memory 账本非空」；
 - 报告 / 复盘 **只**出现在产物元数据里，**不**参与「是否恢复」判断。
 
 ```text
@@ -304,13 +301,13 @@ Preserved unknowns do not retain equal priority outside the current explanation 
 
 ## Memory 与记账
 
-Memory 回答 **「世界是什么状态」**，不是操作日志或待办。
+Memory 回答 **「当前目标已确认的认知资产」**——结论账本，不是操作日志、不是环境截图。
 
-| 前缀 | 进入世界投影的桶 |
-|------|------------------|
-| `surface:` / `vuln:` / `cred:` | 对象 |
-| `tech:` / `port:` / `artifact:` | 约束 |
-| `hypothesis:`（可选 `[observed\|confirmed\|contradicted\|blocked]`） | 关系 / 未知 |
+| 前缀 | 含义 |
+|------|------|
+| `surface:` / `vuln:` / `cred:` | 对象事实 / 已确认漏洞 / 凭据 |
+| `tech:` / `port:` / `artifact:` | 技术约束 / 端口 / 证据索引 |
+| `hypothesis:`（可选 `[observed\|confirmed\|contradicted\|blocked]`） | 关系 / 未知（带状态） |
 | `counter:` / `dead:` | 反证 / 死路 |
 | `target:` | 身份 |
 | `future:` | 只进 memory，**不投影** |
@@ -319,8 +316,12 @@ Memory 回答 **「世界是什么状态」**，不是操作日志或待办。
 - 每条少于 3 行，一次不超过 15 行；有观察 / 冲突 / 结论才写，不是每步填表。
 - 换目标：DELTA 写新 `target:` → merge 机械归档旧世界。
 
+**结论 vs 事实**：`surface:` 只记对象存在性 / 技术事实。越权 / 绕过 / 泄露等探索**结论**用 `hypothesis [状态]` / `vuln:` / `counter:` 表达，并带 `req_`/`exp-` 证据编号——结论不带证据或引用不可解析时，merge 会打 WARN / WARN HIGH。
+
+**账本是更新不是追加**：同一 target 内，同文本的 `hypothesis` 行会被**替换**（状态升级，如 `observed` → `confirmed` 带证据），不会重复堆积；不同文本则是新条目。
+
 错误示例：`surface: 测试了 /admin`  
-正确示例：`hypothesis [contradicted]: 存在 admin 后台`
+正确示例：`hypothesis [confirmed]: 未授权可读他人问卷 (req_747)`
 
 ---
 
@@ -332,7 +333,7 @@ Memory 回答 **「世界是什么状态」**，不是操作日志或待办。
 |------|------|
 | HTTP | `python runtime/http_request.py <target> <curl 风格参数…>`（禁止裸 curl 当主路径） |
 | 非 HTTP / 脚本 | `python runtime/execute.py <target> --timeout 60 --purpose "…" --cmd "…"`；复杂逻辑先写 `results/<target>/scripts/` |
-| 实验 | `create … --activate --hypothesis "…"`；`close … --status success\|failed\|blocked\|unknown` |
+| 实验 | `create … --activate --hypothesis "…"`；`close … --status success\|failed\|blocked\|unknown --memory-update '{"text":"探索后的结论","status":"confirmed","evidence":["req_747"]}'`（close 自动写回账本） |
 | Memory | `echo "DELTA:…" \| python runtime/merge.py` |
 
 展示截断 ≠ 磁盘全文：以 `results/<target>/responses/` 为准。
@@ -364,7 +365,7 @@ cd xiangxiong
 claude
 ```
 
-hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对路径的 `scripts/` / `context/` 入口（`settings.example.json`）。
+hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对路径的 `scripts/` 入口（`settings.example.json`）。
 
 **范围：** 仅授权目标。作者不对未授权扫描或滥用负责。  
 **不要提交：** `results/`、`.claude/memory.md`、本机 `settings.local.json`、cookie / VPN / `.env`（见 `.gitignore`）。
@@ -372,6 +373,34 @@ hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对�
 ---
 
 ## 更新日志
+
+### v0.3.1（2026-08）
+
+**证据完整性加固 + Runtime 边界冻结**
+
+#### 三刀清理（冻结前收尾）
+- **删除 pattern_counts**：`http_request.py` 移除 v0.2 Observer 残留的响应签名统计（`.pattern_counts.json` / `[OBSERVATION REPETITION]`）。Runtime 不再产生任何事件日志，只剩 `request → save response artifact → metadata → experiment binding`。
+- **证据引用完整性（账本 FK 约束）**：`merge.py` 对结论行做三级校验——L1 无证据引用 WARN；L2 引用（`req_NNN`/`exp-NNN`）文件不可解析 WARN HIGH；L3 可解析静默停止。只查存在性，不检查响应内容、不判断是否证明漏洞。
+- **hypothesis ledger update semantics**：同 target 内同 normalized text（去状态 / 去证据块 / 压缩空白）的 `hypothesis` 行被**替换**（状态升级），不同文本为新条目——memory 是账本不是日志。
+
+#### Runtime 边界冻结
+- **删除 observer 残留**：`merge.py` 移除 `OBSERVE_STATE_PATH` 常量、`reset_observe_on_target_change()` 函数（31 行）、`.observe_state.json` 读写逻辑、`consecutive_none` / `same_action_count` / `prefix_counts` 计数器。
+- **[OPEN EXPERIMENTS] 投影**：SessionStart 新增未关闭实验状态展示（id / observations 数量 / artifact / hypothesis），纯状态投影，不提醒关闭、不判断生命周期、不阻塞行为。
+- **离线验证工具**：新增 `scripts/validate_persistence.py`，衡量 evidence coverage、hypothesis lifecycle completion、experiment→memory 转化率。
+- **架构边界确认**：Runtime 职责收敛为 artifact persistence + cognitive ledger + context projection；不判断停滞、不控制行为、不引入 planner/workflow。
+
+测试收敛：25 tests passed（删除 pattern 回归锁）。
+
+### v0.3.0（2026-08）
+
+**从"行为控制系统"收敛为"认知持久化 Runtime"**
+
+- **删除高频投影**：移除 PostToolUse `assembler.py`（每次工具调用重复注入 3KB Contract）与 Stop `stop_check.py`；hooks 只剩 PreToolUse memory_guard + SessionStart。世界更新由「合并记账 → 下次 SessionStart 投影」驱动。
+- **删除停滞传感（v0.3.0）**：`observe.py` / `[OBSERVE]` 段整体移除（对脚本化 HTTP 失明且无接线决策）。v0.3.1 后续清除 `.observe_state.json` Runtime 残留。
+- **实验闭环自动写回**：`experiment.py close --memory-update '{"text":...,"evidence":[...]}'` 机械写回 `hypothesis [状态]` + 证据行（target 校验 / 查重 / 写入），消灭"憋大改"手工 DELTA。
+- **证据绑定**：merge 对 `confirmed/contradicted/vuln/counter` 无证据引用打 WARN；CLAUDE.md 明确"结论 vs 事实"记账规则。
+- **结论账本**：memory 从"对象世界模型"收敛为"已确认认知资产账本"（vuln / hypothesis[状态] / counter / dead + 证据编号）。
+- 实测：无投影下 agent 自主完成微前端逆向（某 SRC 目标 A）、签名还原 + AES/DES 解密（某 SRC 目标 B），结论均带证据落账。
 
 ### v0.2.0（2026-08）
 
@@ -409,8 +438,8 @@ hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对�
 
 ## 一句话
 
-**象雄 = 在 Claude Code 上给黑盒渗透一个「世界状态 + 最小摩擦」的 Runtime；  
-知识与报告是旁路资产，决策仍在模型；  
+**象雄 = 在 Claude Code 上给黑盒渗透一个「认知持久化 + 最小摩擦」的 Runtime；  
+不控制 Agent 怎么探索，只保证它想清楚的结论不丢失——  
 优化的是过早收缩世界的偏差，不是堆更多漏洞菜单。**
 
 ---

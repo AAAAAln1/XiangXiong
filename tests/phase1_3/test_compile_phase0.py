@@ -144,7 +144,6 @@ class TestPhase0Parity(unittest.TestCase):
             "[ANTI-COMPRESSION]",
             "[WORLD MODEL]",
             "[RESUME]",
-            "[OBSERVE]",
             "[ARTIFACTS]",
         ):
             self.assertIn(marker, expected)

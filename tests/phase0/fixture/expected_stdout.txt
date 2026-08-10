@@ -109,12 +109,6 @@ Data 关注值从 Source 经 Transform 与 Validator 到消费者或落点的关
 - Supported explanations should constrain the next experiment.
 - Preserved unknowns do not retain equal priority outside the current explanation boundary.
 
-[OBSERVE]
-consecutive_none: 6
-same_action_count: 4
-stagnation_level: warning
-last_round: 12
-
 [WORLD MODEL]
 target: phase0.example.test
 

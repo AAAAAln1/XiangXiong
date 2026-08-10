@@ -90,6 +90,60 @@ SessionStart 只读 `.claude/memory.md`（active world）。新 session 时若 m
 
 `resources/` 可存放 Runtime 使用的机械资源（如 `resources/wordlists/` 下的中性 surface path/token prior）。它不是第五认知层：只服务采样覆盖，不包含漏洞利用步骤，不替代 Knowledge 或 Agent 推理。
 
+**Projection = 认知接口（v0.3 宪法，贯穿 Runtime 与 Contract）：**
+
+**核心不变量：**
+> **Projection 可以改变 LLM 看世界的方式，但不能改变 LLM 认为世界是什么。**
+
+Projection 不是数据展示层，不是"优化后的 memory"，也不是"第二个 World Model"——它是 LLM 当前认知循环的**输入接口**。它的价值不是压缩信息，而是降低 LLM **从已有事实重新构建当前世界状态的成本**。它处于观察与解释的边界：
+
+```
+Runtime：观察 → 整理 → 展示
+LLM：   解释 → 假设 → 实验 → 确认
+```
+
+**七条宪法：**
+
+1. **Memory 是唯一世界状态。** projection 永远不新增、不修改、不删除任何 memory 语义。
+
+2. **Projection 是认知透镜，不是世界状态。** 删除任何 projection，memory 不变、world 不变，只是阅读成本增加；若删除后 LLM 无法恢复世界，说明该 projection 已越界。
+
+3. **Projection 可重排与压缩结构，但不得引入语义解释。** 合法形态：`memory → WorldView → format_world() / format_hypothesis() / format_object()`。非法形态：`hypothesis interpretation → object inference → frontier generation`——后者把 LLM 本应完成的解释过程固化进 Runtime。
+
+4. **每个 projection token 必须直接回指 memory，或由 memory 机械派生。** 两类派生：
+   - **Structural Derivation（允许）**：`count: 5` / `state: confirmed` / `source: hypothesis row #12`——任何实现机械得到同一结果（`len(hypotheses)`）。
+   - **Semantic Derivation（禁止）**：`DC01 is high value target` / `this host is likely domain controller`——这是 interpretation，不是 projection。
+   - **规则：Projection may compress structure. Projection must never compress meaning.**
+
+5. **投影函数相互独立：** 所有 projection 从 WorldView 派生，**从不从其他 projection 派生**。composer 只做顺序拼接，不做语义级联。禁止"投影链投影"。
+
+6. **Derived projection 不得被视为权威。** 任何结论必须引用 memory/hypothesis，不得单独引用 projection。LLM 停止回看 surface/hypothesis/experiment 而直接基于 Object View 推理，即为第二事实源。
+
+7. **Object/relation/frontier projection 可暴露不确定性，但绝不可消解不确定性。**
+
+**分组即语义操作（Object projection 的特殊风险）：**
+- **允许**展示候选聚合：`SURFACE CLUSTER CANDIDATE — members: [10.0.0.5, DC01.local] — boundary: hypothesis [observed]: A ? B`
+- **禁止**展示确认对象：`Object: DC01 — smb, ldap, kerberos`——"Object" 这个名字已暗示归并完成，视觉结构会让未确认关系看起来已确认，**Object projection 自身制造 closure**。
+- 边界：投影可展示"候选聚合"（未确认分组 + boundary hypothesis 状态），不可展示"确认对象"（归并结论）。
+
+**分层（按"是否属于世界状态本身"划分，非重要性）：**
+- **Core Projection（默认注入）**：WORLD + HYPOTHESES——描述"当前世界是什么 + 哪些地方未确定"，是 memory 的直接认知接口；删除后 LLM 无法工作。
+- **Derived Projection（按需 Read）**：OBJECT / FRONTIER / RELATION——描述"如何组织世界"，不是世界本身；删除后只是扫描成本增加。**不默认注入、不参与 action、不产生新 memory、不作为其他 projection 输入。**
+
+**AVAILABLE PROJECTIONS（目录，必须极度弱化）：**
+```
+[AVAILABLE PROJECTIONS]
+object_projection: exists
+frontier_projection: absent
+Read only. No recommendation provided.
+```
+- 命名用 **projections** 而非 views——强调这是 memory 的排列方式，不是能力。
+- 目录不携带统计（`4 objects` 已暗示"对象数量是重要维度"），不排序，不推荐。统计若需要，留在 projection 内部。
+- 目录的存在性与注入行为分离：Runtime 列出"有哪些排列可选"，选择权全程在 LLM。
+
+**Projection Closure 最终判据：**
+projection 的结构不得让未确认关系看起来已确认。验证方法：对每个投影段问——"这个分组/计数/省略是否暗示了 memory 中不存在的确定性？"若是，即 closure。
+
 ### Artifacts
 
 `results/` 保存目标相关响应、实验 metadata、证据、脚本、报告与复盘。Runtime 可读写 Artifact 路径和 metadata，但不解释目标内容。现有 Experiment 数据模型保持不变。目标侧可选用 `results/<target>/wordlists/` 存放本场展开/裁剪结果。

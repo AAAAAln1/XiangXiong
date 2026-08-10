@@ -35,7 +35,6 @@ if hasattr(sys.stderr, "reconfigure"):
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULTS_DIR = os.path.join(_PROJECT_ROOT, "results")
-OBSERVE_STATE_PATH = os.path.join(_PROJECT_ROOT, ".observe_state.json")
 TURN_STATE_PATH = os.path.join(_PROJECT_ROOT, ".turn_state.json")
 
 try:
@@ -137,12 +136,112 @@ def parse_delta(text: str) -> list:
     return ops
 
 
+# 证据绑定提示：confirmed/contradicted 结论必须带证据引用；observed/blocked 是探索态允许无证据。
+# 仅为 WARN，不拒绝写入——提高认知事务 commit 质量，不拦截。
+EVIDENCE_HINT_MARKERS = ("req_", "exp-", "artifact", "responses/")
+
+
+def _evidence_binding_warning(line: str):
+    """L1: 按 hypothesis 状态区分证据要求（v0.3 Evidence Binding Contract）。"""
+    stripped = line.strip()
+    state_match = re.match(r"^hypothesis \[(\w+)\]", stripped)
+    if state_match:
+        state = state_match.group(1)
+        if state in ("confirmed", "contradicted"):
+            if not any(m in stripped for m in EVIDENCE_HINT_MARKERS):
+                return f"hypothesis [{state}] 缺证据引用(req_/exp-/artifact): {stripped[:80]}"
+        return None
+    if stripped.startswith(("vuln:", "counter:")):
+        if not any(m in stripped for m in EVIDENCE_HINT_MARKERS):
+            return f"{stripped.split(':')[0]} 缺证据引用: {stripped[:80]}"
+    return None
+
+
+# ── v0.3.1 第二刀：证据引用完整性（账本 FK 约束）──
+# 只校验引用可解析（文件存在性），红线：不检查响应内容、不判断是否证明漏洞。
+EVIDENCE_REF_RE = re.compile(r"req_\d+|exp-\d+")
+
+
+def _evidence_reference_check(line: str, lines: list):
+    """L2: 引用的 req/exp 是否可解析。返回不可解析的引用列表；全部可解析返回空。"""
+    refs = EVIDENCE_REF_RE.findall(line)
+    if not refs:
+        return []
+    target = ""
+    for l in lines:
+        if l.strip().startswith("target:"):
+            target = l.strip()[len("target:"):].strip()
+            break
+    safe = target_safe_name(target) if target else ""
+    if not safe:
+        return []
+    base = os.path.join(RESULTS_DIR, safe)
+    unresolved = []
+    for ref in refs:
+        if ref.startswith("req_"):
+            resp = os.path.join(base, "responses")
+            if not (os.path.exists(os.path.join(resp, ref + ".txt"))
+                    or os.path.exists(os.path.join(resp, ref + ".json"))):
+                unresolved.append(ref)
+        elif ref.startswith("exp-"):
+            if not os.path.isdir(os.path.join(base, "experiments", ref)):
+                unresolved.append(ref)
+    return unresolved
+
+
+def _warn_evidence_integrity(line: str, lines: list) -> None:
+    """L2 HIGH WARN：引用不可解析。L3（可解析）静默停止，不再深入。"""
+    unresolved = _evidence_reference_check(line, lines)
+    if unresolved:
+        print(
+            f"[merge] WARN HIGH 证据引用不可解析: {', '.join(unresolved)} — {line.strip()[:80]}",
+            file=sys.stderr,
+        )
+
+
+# ── v0.3.1 第三刀：hypothesis ledger update semantics ──
+# memory 是账本不是日志：同 target 内同 normalized text 的 hypothesis 行 → 更新（状态升级），
+# 不同文本 → 新条目。不是清垃圾，是账本语义。
+HYPOTHESIS_PREFIX_RE = re.compile(r"^hypothesis(?:\s+\[[a-zA-Z]+\])?:\s*(.*)$", re.IGNORECASE)
+EVIDENCE_BLOCK_RE = re.compile(r"[\[\(][^\]\)]*(?:req_|exp-)[^\]\)]*[\]\)]")
+
+
+def _normalize_hypothesis_text(line: str) -> str:
+    """去掉状态标记、证据引用块、压缩空白——仅用于同 target 账本内比较。"""
+    m = HYPOTHESIS_PREFIX_RE.match(line.strip())
+    if not m:
+        return ""
+    text = EVIDENCE_BLOCK_RE.sub("", m.group(1))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _hypothesis_ledger_update(lines: list, new_line: str) -> bool:
+    """同 normalized text 的已有 hypothesis 行 → 替换为 new_line（保留新状态+证据）。"""
+    norm = _normalize_hypothesis_text(new_line)
+    if not norm:
+        return False
+    for i, existing in enumerate(lines):
+        if not existing.strip().startswith("hypothesis"):
+            continue
+        if _normalize_hypothesis_text(existing) == norm:
+            lines[i] = new_line.rstrip("\n") + "\n"
+            return True
+    return False
+
+
 def add_line(lines: list, new_line: str):
-    """ADD：追加到 memory 末尾。非 prefix: content 格式的行拒绝写入。"""
+    """ADD：追加到 memory 末尾。非 prefix: content 格式的行拒绝写入。
+    hypothesis 行走账本更新语义（同文本替换），其余前缀按追加。"""
     if not _is_valid_line(new_line):
         preview = new_line.strip()[:60]
         print(f"[merge] REJECTED (invalid prefix): {preview}", file=sys.stderr)
         return lines
+    warn = _evidence_binding_warning(new_line)
+    if warn:
+        print(f"[merge] WARN {warn}", file=sys.stderr)
+    if new_line.strip().startswith("hypothesis"):
+        if _hypothesis_ledger_update(lines, new_line):
+            return lines
     lines.append(new_line.rstrip("\n") + "\n")
     return lines
 
@@ -158,6 +257,9 @@ def update_line(lines: list, prefix: str, new_content: str):
         preview = new_content.strip()[:60]
         print(f"[merge] REJECTED UPDATE (invalid prefix): {preview}", file=sys.stderr)
         return lines
+    warn = _evidence_binding_warning(new_content)
+    if warn:
+        print(f"[merge] WARN {warn}", file=sys.stderr)
     for i, line in enumerate(lines):
         if line.strip().startswith(prefix):
             lines[i] = new_content.rstrip("\n") + "\n"
@@ -175,6 +277,7 @@ def apply_delta(lines: list, ops: list) -> list:
 
         if action == "ADD":
             lines = add_line(lines, line_text)
+            _warn_evidence_integrity(line_text, lines)
         elif action == "DELETE":
             lines = delete_line(lines, line_text)
         elif action == "UPDATE":
@@ -182,9 +285,11 @@ def apply_delta(lines: list, ops: list) -> list:
             parts = re.split(r'\s*[=→]\s*', line_text, maxsplit=1)
             if len(parts) == 2:
                 lines = update_line(lines, parts[0].strip(), parts[1].strip())
+                _warn_evidence_integrity(parts[1].strip(), lines)
             else:
                 # 无法解析 → 追加为 ADD
                 lines = add_line(lines, line_text)
+                _warn_evidence_integrity(line_text, lines)
 
     return lines
 
@@ -256,37 +361,9 @@ def reset_turn_state_on_target_change() -> None:
         pass
 
 
-def reset_observe_on_target_change() -> None:
-    """换 target 时清零 target-loop 停滞计数 + turn telemetry（机械；不解释业务）。"""
+def reset_turn_state_on_target_boundary() -> None:
+    """换 target 时清零 turn telemetry（机械；不解释业务）。"""
     reset_turn_state_on_target_change()
-    if not os.path.exists(OBSERVE_STATE_PATH):
-        return
-    try:
-        with open(OBSERVE_STATE_PATH, "r", encoding="utf-8") as f:
-            state = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return
-    if not isinstance(state, dict):
-        return
-    state["consecutive_none"] = 0
-    state["same_action_count"] = 0
-    state["actions"] = []
-    state["memory_offset"] = 0
-    if "prefix_counts" in state and isinstance(state["prefix_counts"], dict):
-        state["prefix_counts"] = {
-            "vuln": 0,
-            "hypothesis": 0,
-            "surface": 0,
-            "cred": 0,
-            "total_lines": 0,
-            "total_chars": 0,
-        }
-    try:
-        with open(OBSERVE_STATE_PATH, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False)
-        print("[merge] observe counters reset on target change", file=sys.stderr)
-    except OSError as err:
-        print(f"[merge] observe reset failed: {type(err).__name__}", file=sys.stderr)
 
 
 def split_ops_at_first_target(ops: list):
@@ -344,7 +421,7 @@ def apply_target_boundary(lines: list, ops: list) -> tuple:
         file=sys.stderr,
     )
     archive_active_memory(lines, old_body)
-    reset_observe_on_target_change()
+    reset_turn_state_on_target_boundary()
     lines = [new_line + "\n"]
     lines = apply_delta(lines, after)
     return lines, True
