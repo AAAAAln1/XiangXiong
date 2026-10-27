@@ -1,4 +1,6 @@
 target: phase0.example.test
+goal: confirm the reflected-xss hypothesis with differential evidence
+subgoal: establish an unauthenticated baseline first
 tech: nginx
 port: 443 https
 artifact: results/phase0.example.test/responses/req_001.txt
@@ -11,6 +13,7 @@ hypothesis [observed]: admin panel may exist at /admin
 hypothesis [blocked]: cannot verify auth bypass without credentials
 hypothesis [confirmed]: /health returns 200 without auth
 hypothesis [contradicted]: /debug was not open on first probe
+hypothesis [sweep]: enumerate demo endpoints for authorization gaps
 counter: /old-admin returned 404 repeatedly
 dead: /phpmyadmin not reachable
 future: later recheck rate limits after creds

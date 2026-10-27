@@ -1,4 +1,4 @@
-[ARTIFACTS]
+[ARTIFACTS] — 收口产物；写前先 Read knowledge/report_spec.md（格式）与 knowledge/bounty_criteria.md（过滤）
 report.md: absent
 lessons.md: absent
 

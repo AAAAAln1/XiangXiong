@@ -1,1 +1,14 @@
 [merge] ADD:2 UPDATE:0 DELETE:0
+[merge] 决策摘要（世界已变；完整投影：python runtime/project.py）
+[GOAL] target=phase0.example.test · 1 goal, 1 subgoal · 本投影只属于 phase0.example.test；换站先写 DELTA: target: <新站>
+  goal: confirm the reflected-xss hypothesis with differential evidence
+  subgoal: establish an unauthenticated baseline first
+
+[NEXT] 4 项可派 — 同一条消息发多个 Agent 调用即并行：
+  Agent(subagent_type="deepdive", prompt="target=phase0.example.test intent=h:7d75b8")   # enumerate demo endpoints for autho…
+  Agent(subagent_type="deepdive", prompt="target=phase0.example.test intent=h:5905e9")   # phase0 merge baseline line
+  Agent(subagent_type="deepdive", prompt="target=phase0.example.test intent=h:8a01be")   # admin panel may exist at /admin
+  (+1 more，全部见 [FRONTIER] / [SWEEP])
+
+可派 4（sweep 1 / open 3） · 闭合 2 · 排除 2 · 未解释 1
+

@@ -1,0 +1,6 @@
+[FRONTIER] (4 open) — 派发（不阻塞你继续探索）：Agent(subagent_type="deepdive", prompt="target=phase0.example.test intent=<此行的 h:xxxxxx>")
+  hypothesis: search q parameter may reflect unsanitized  h:a8e3da
+  hypothesis: admin panel may exist at /admin  [observed]  h:8a01be
+  hypothesis: cannot verify auth bypass without credentials  [blocked]  h:f30683
+  next: later recheck rate limits after creds  f:4419c2
+

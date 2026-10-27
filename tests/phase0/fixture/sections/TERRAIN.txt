@@ -1,0 +1,4 @@
+[TERRAIN]
+  goal 2 | observation 2 | finding 1 | asset 1 | constraint 2 | evidence 1 | edge 6 (blocked 1 | confirmed 1 | contradicted 1 | observed 1 | sweep 1 | none 1) | exclusion 2 | intent 1
+  vuln_without_exp 1（vuln 行里没有 exp-NNN 引用；建议补一次实验）
+

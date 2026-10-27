@@ -1,0 +1,4 @@
+[GOAL] target=phase0.example.test · 1 goal, 1 subgoal · 本投影只属于 phase0.example.test；换站先写 DELTA: target: <新站>
+  goal: confirm the reflected-xss hypothesis with differential evidence
+  subgoal: establish an unauthenticated baseline first
+

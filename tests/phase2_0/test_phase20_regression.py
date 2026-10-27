@@ -23,7 +23,8 @@ COGNITION = (
     "experiment_model.md",
     "surface_misalignment.md",
 )
-RUNTIME_FILES = ("paths.py", "world.py", "project.py", "merge.py")
+RUNTIME_FILES = ("paths.py", "world.py", "graph.py", "digest.py", "filelock.py",
+                 "turn_state.py", "project.py", "merge.py")
 
 
 def _build_ws(tmp: Path) -> Path:
@@ -62,17 +63,30 @@ def _run(py_path: str, ws: Path) -> subprocess.CompletedProcess:
 
 class TestSectionOrderContract(unittest.TestCase):
     def test_compile_section_order_contract(self):
-        """WORLD < RECENT EXPERIMENTS < HYPOTHESES < RESUME < ARTIFACTS."""
+        """注意力顺序（2026-09-18 投影审计重排）：
+
+        去哪 → 形状 → 拿到什么 → **现在做什么** → 待办/可派 → 别碰 → 背景 → 历史 → 产出
+
+        GOAL < TERRAIN < NEXT < FRONTIER < EXCLUDED < WORLD MODEL
+             < RECENT EXPERIMENTS < SETTLED < ARTIFACTS
+
+        [RESUME] 已删除：它的 target 与 [GOAL] 段头重复、计数与 [TERRAIN] 重复。
+        [NEXT] 是本次新增：投影原先只描述世界、不回答"我该做什么"。
+        """
         with tempfile.TemporaryDirectory(prefix="xx_p20o_") as tmp:
             ws = _build_ws(Path(tmp))
             proc = _run(str(ws / "runtime" / "project.py"), ws)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             out = proc.stdout
             markers = (
+                "[GOAL]",
+                "[TERRAIN]",
+                "[NEXT]",
+                "[FRONTIER]",
+                "[EXCLUDED]",
                 "[WORLD MODEL]",
                 "[RECENT EXPERIMENTS]",
-                "HYPOTHESES",
-                "[RESUME]",
+                "[SETTLED]",
                 "[ARTIFACTS]",
             )
             idx = [out.index(m) for m in markers]

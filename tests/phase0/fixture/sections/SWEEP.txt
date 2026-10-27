@@ -1,0 +1,3 @@
+[SWEEP] (1 batch) — 派发（不阻塞你继续探索）：Agent(subagent_type="deepdive", prompt="target=phase0.example.test intent=<此行的 h:xxxxxx>") — 批量机械验证，默认派发：别在主会话里串行跑 N 次
+  hypothesis: enumerate demo endpoints for authorization gaps  h:7d75b8
+

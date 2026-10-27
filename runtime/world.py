@@ -11,12 +11,33 @@ WorldView is a temporary projection helper, not canonical storage (H11).
 
 from __future__ import annotations
 
+import re
 from typing import List, NamedTuple, Optional, Tuple
 
 # Hypothesis optional states already defined by memory contract / merge prefixes.
+# `sweep` = 批量机械验证类工作（枚举/爆破/逐条比对）：语义上仍是"未验证的假设"，
+# 但它的**正确执行方式是派发给独立 context**，而不是主会话串行做 N 次。
+# 这是记账副产品派发的载体（规格 §8.0g）：主 agent 写下一个 [sweep] 行，
+# 投影就机械地把它列进可派发队列。
 _HYPOTHESIS_STATES = frozenset(
-    {"observed", "confirmed", "contradicted", "blocked", "unknown"}
+    {"observed", "confirmed", "contradicted", "blocked", "unknown", "sweep"}
 )
+
+# dead 拓扑三态（与 merge.DEAD_REASONS 同源语义；此处只做机械携带）。
+_DEAD_STATES = frozenset({"filtered", "closed", "unreachable"})
+_DEAD_PREFIX_RE = re.compile(r"^dead(?:\s+\[(\w+)\])?:\s*")
+
+
+def _parse_dead(stripped: str) -> ParsedLine:
+    """dead: / dead [reason]: exclusion 行解析。
+
+    关键：prefix 统一归一为 "dead"，reason 进 state；否则 `dead [filtered]:` 会因
+    startswith("dead:") 失配而静默落入 unrecognized/objects 桶（投影里排除直接消失，
+    不抛异常——本仓库最警惕的静默失败形态，2026-10-06 实测复现）。
+    """
+    m = _DEAD_PREFIX_RE.match(stripped)
+    state = m.group(1) if (m and m.group(1)) else None
+    return ParsedLine(raw=stripped, prefix="dead", state=state)
 
 
 class ParsedLine(NamedTuple):
@@ -106,13 +127,25 @@ def parse(lines: List[str]) -> WorldView:
             objects.append(ParsedLine(raw=stripped, prefix="hypothesis", state=None))
             continue
 
-        if (
-            stripped.startswith("counter:")
-            or stripped.startswith("dead:")
+        if stripped.startswith("counter:"):
+            counters.append(ParsedLine(raw=stripped, prefix="counter", state=None))
+            continue
+        if stripped.startswith("dead") and (
+            stripped.startswith("dead:")
+            or stripped.startswith("dead [")
             or stripped.startswith("dead-summary:")
         ):
+            if stripped.startswith("dead-summary:"):
+                counters.append(ParsedLine(raw=stripped, prefix="dead-summary", state=None))
+            else:
+                counters.append(_parse_dead(stripped))
+            continue
+
+        if stripped.startswith("goal:") or stripped.startswith("subgoal:"):
+            # 搜索的终止条件 / 阶段里程碑。进 objects（无独立 bucket），
+            # 由 project 单独成段 [GOAL] —— 它是唯一的方向性信息。
             prefix = stripped.split(":", 1)[0]
-            counters.append(ParsedLine(raw=stripped, prefix=prefix, state=None))
+            objects.append(ParsedLine(raw=stripped, prefix=prefix, state=None))
             continue
 
         if stripped.startswith("future:"):

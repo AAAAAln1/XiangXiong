@@ -7,5 +7,3 @@ Hypothesis → Experiment → Observation → Conclusion 表达概念关系，�
 Baseline 与 Mutation 是可选的实验关系：它们用于区分“条件变化导致结果变化”和“结果本来如此”，而不是规定请求形式。实验还应暴露其依赖的 premise；当共享 premise 失效，相关实验结论必须按原证据边界重估。
 
 负结果只关闭被实际区分的关系范围。版本、标签、状态码或有限变体不能替代部署条件、可达性和实际影响；未区分结果保留为 unknown，而不是伪装成完成。
-
-这与现有 Experiment Contract 一致：实验 metadata 关联假设、动作、观察、artifact、结论与状态；这些字段建立可追溯性，不替代 Agent 的语义判断，也不改变数据模型。

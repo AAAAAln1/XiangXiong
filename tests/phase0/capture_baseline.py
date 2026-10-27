@@ -29,6 +29,8 @@ COGNITION_MODULES = (
 
 MEMORY_FIXTURE = """\
 target: phase0.example.test
+goal: confirm the reflected-xss hypothesis with differential evidence
+subgoal: establish an unauthenticated baseline first
 tech: nginx
 port: 443 https
 artifact: results/phase0.example.test/responses/req_001.txt
@@ -41,6 +43,7 @@ hypothesis [observed]: admin panel may exist at /admin
 hypothesis [blocked]: cannot verify auth bypass without credentials
 hypothesis [confirmed]: /health returns 200 without auth
 hypothesis [contradicted]: /debug was not open on first probe
+hypothesis [sweep]: enumerate demo endpoints for authorization gaps
 counter: /old-admin returned 404 repeatedly
 dead: /phpmyadmin not reachable
 future: later recheck rate limits after creds
@@ -118,7 +121,8 @@ def build_workspace(ws: Path) -> None:
 
     # Point session_start / merge at this workspace by copying scripts with same relative layout
     shutil.copy2(ROOT / "scripts" / "session_start.py", ws / "scripts" / "session_start.py")
-    for name in ("paths.py", "world.py", "project.py", "merge.py"):
+    for name in ("paths.py", "world.py", "graph.py", "digest.py", "filelock.py",
+                 "turn_state.py", "project.py", "merge.py"):
         shutil.copy2(ROOT / "runtime" / name, ws / "runtime" / name)
 
 
@@ -189,15 +193,22 @@ def export_fixture(ws: Path, stdout: str, merge_before: str, merge_after: str, m
     write_text(OUT / "merge_memory_after.md", merge_after)
     write_text(OUT / "merge_run_log.txt", merge_log)
 
-    # Section slices for H0 gold (COGNITION / ANTI-COMPRESSION / WORLD / RESUME)
-    # WORLD gold = full attention block through unknowns (ends at RESUME),
-    # matching Phase0 four-region freeze (COGNITION / ANTI-COMPRESSION / WORLD / RESUME).
+    # Section slices for gold comparison.
+    # WORLD gold = full attention block through unknowns (ends at RESUME).
     # v0.3: [OBSERVE] 段已随 stagnation 体系删除。
+    # P5: 注意力顺序重排 → 动态块起点由 [WORLD MODEL] 改为 [TERRAIN]。
+    # 2026-09-17: 静态宪法（[COGNITION]/[ANTI-COMPRESSION]）移出 hook 注入，
+    #     改由 CLAUDE.md 的 @cognition/*.md 导入随 system prompt 注入 —— 它们不再是
+    #     stdout 的一部分，故不再切片（原因见 runtime/project.py PROJECTION_BUDGET_CHARS）。
     sections = {
-        "COGNITION": _slice_section(stdout, "[COGNITION]", "[ANTI-COMPRESSION]"),
-        "ANTI-COMPRESSION": _slice_section(stdout, "[ANTI-COMPRESSION]", "[WORLD MODEL]"),
-        "WORLD": _slice_section(stdout, "[WORLD MODEL]", "[RESUME]"),
-        "RESUME": _slice_section(stdout, "[RESUME]", "[ARTIFACTS]"),
+        "GOAL": _slice_section(stdout, "[GOAL]", "[TERRAIN]"),
+        "TERRAIN": _slice_section(stdout, "[TERRAIN]", "[FINDINGS]"),
+        "FINDINGS": _slice_section(stdout, "[FINDINGS]", "[NEXT]"),
+        "NEXT": _slice_section(stdout, "[NEXT]", "[FRONTIER]"),
+        "FRONTIER": _slice_section(stdout, "[FRONTIER]", "[SWEEP]"),
+        "SWEEP": _slice_section(stdout, "[SWEEP]", "[EXCLUDED]"),
+        "EXCLUDED": _slice_section(stdout, "[EXCLUDED]", "[WORLD MODEL]"),
+        "WORLD": _slice_section(stdout, "[WORLD MODEL]", "[ARTIFACTS]"),
         "ARTIFACTS": stdout[stdout.index("[ARTIFACTS]"):] if "[ARTIFACTS]" in stdout else "",
     }
     sec_dir = OUT / "sections"

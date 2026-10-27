@@ -1,0 +1,4 @@
+[EXCLUDED] (2) — 已排除方向，勿重试（详情见 memory）
+  counter: /old-admin returned 404 repeatedly
+  dead: /phpmyadmin not reachable
+

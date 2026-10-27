@@ -44,8 +44,10 @@ def main() -> None:
         for name in COGNITION_MODULES:
             shutil.copy2(FIX / "cognition" / name, ws / "cognition" / name)
         shutil.copy2(ROOT / "scripts" / "session_start.py", ws / "scripts" / "session_start.py")
-        # Adapter needs full projection stack (Phase 1.4): paths/world/project/merge
-        for name in ("paths.py", "world.py", "project.py", "merge.py"):
+        # Adapter needs full projection stack (Phase 1.4 + F0 turn_state):
+        # paths/world/graph/digest/filelock/turn_state/project/merge
+        for name in ("paths.py", "world.py", "graph.py", "digest.py", "filelock.py",
+                     "turn_state.py", "project.py", "merge.py"):
             shutil.copy2(ROOT / "runtime" / name, ws / "runtime" / name)
 
         out = subprocess.run(

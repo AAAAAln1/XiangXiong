@@ -1,0 +1,15 @@
+{
+  "experiment_id": "exp-001",
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "hypothesis": "search q may reflect",
+  "action": "probe search with marker",
+  "closed": true,
+  "status": "failed",
+  "conclusion": "no reflection in truncated body",
+  "observations": [
+    {
+      "observation": "status 200 length stable",
+      "artifact": "responses/req_001.txt"
+    }
+  ]
+}

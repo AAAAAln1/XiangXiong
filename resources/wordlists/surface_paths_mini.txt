@@ -49,7 +49,7 @@ package.json
 web.xml
 WEB-INF/web.xml
 
-# --- auth naming traps (longjian-class) ---
+# --- auth naming traps (legacy-panel class) ---
 logout.aspx
 Logout.aspx
 logoff.aspx

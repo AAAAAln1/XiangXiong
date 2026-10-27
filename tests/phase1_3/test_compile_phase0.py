@@ -41,7 +41,8 @@ def _build_ws(tmp: Path) -> Path:
     )
     for name in COGNITION:
         shutil.copy2(FIX / "cognition" / name, ws / "cognition" / name)
-    for name in ("paths.py", "world.py", "project.py", "merge.py"):
+    for name in ("paths.py", "world.py", "graph.py", "digest.py", "filelock.py",
+                 "turn_state.py", "project.py", "merge.py"):
         shutil.copy2(ROOT / "runtime" / name, ws / "runtime" / name)
     shutil.copy2(ROOT / "scripts" / "session_start.py", ws / "scripts" / "session_start.py")
     return ws
@@ -57,13 +58,6 @@ class TestCompileAPI(unittest.TestCase):
 
     def test_forbidden_tokens_absent_in_source(self):
         src = (ROOT / "runtime" / "project.py").read_text(encoding="utf-8")
-        # Strip frozen anti-compression string literals (contain word "priority").
-        src_code = re.sub(
-            r'ANTI_COMPRESSION_LINES\s*=\s*\([\s\S]*?\)\n',
-            "ANTI_COMPRESSION_LINES = ()\n",
-            src,
-            count=1,
-        )
         banned = (
             r"\bfocus\s*=",
             r"\bpriority\s*=",
@@ -77,7 +71,7 @@ class TestCompileAPI(unittest.TestCase):
         )
         for pat in banned:
             self.assertIsNone(
-                re.search(pat, src_code, re.IGNORECASE),
+                re.search(pat, src, re.IGNORECASE),
                 msg=f"banned pattern present: {pat}",
             )
 
@@ -140,10 +134,14 @@ class TestPhase0Parity(unittest.TestCase):
     def test_key_sections_present(self):
         expected = (FIX / "expected_stdout.txt").read_text(encoding="utf-8")
         for marker in (
-            "[COGNITION]",
-            "[ANTI-COMPRESSION]",
+            "[GOAL]",
+            "[TERRAIN]",
+            "[FINDINGS]",
+            "[NEXT]",
+            "[FRONTIER]",
+            "[SWEEP]",
+            "[EXCLUDED]",
             "[WORLD MODEL]",
-            "[RESUME]",
             "[ARTIFACTS]",
         ):
             self.assertIn(marker, expected)

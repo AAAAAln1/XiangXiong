@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>象雄批量渗透 · 新建任务</title>
+<style>
+:root { --bg:#0d1117; --card:#161b22; --border:#30363d; --fg:#c9d1d9; --accent:#58a6ff;
+        --red:#f85149; --muted:#8b949e; --warn:#d29922; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); color:var(--fg); font-family:"Segoe UI","Microsoft YaHei",monospace; padding:24px; }
+h1 { font-size:20px; margin-bottom:16px; }
+h1 a { color:var(--fg); text-decoration:none; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px; max-width:720px; }
+label { display:block; font-size:14px; margin-bottom:8px; font-weight:600; }
+textarea { width:100%; height:160px; background:#0d1117; color:var(--fg); border:1px solid var(--border);
+           border-radius:6px; padding:10px; font-family:inherit; font-size:14px; resize:vertical; }
+textarea::placeholder { color:var(--muted); }
+.auth { display:flex; align-items:center; gap:8px; margin:14px 0; font-size:14px; cursor:pointer; }
+.auth input { width:16px; height:16px; }
+.auth.warn { color:var(--warn); }
+.btn { background:var(--accent); color:#000; border:none; padding:10px 20px; border-radius:6px;
+       font-size:14px; cursor:pointer; font-weight:600; }
+.btn:disabled { opacity:0.5; cursor:not-allowed; }
+.msg { margin-top:12px; font-size:14px; min-height:20px; }
+.msg.ok { color:#3fb950; }
+.msg.err { color:var(--red); }
+.back { display:inline-block; margin-bottom:14px; color:var(--muted); text-decoration:none; font-size:14px; }
+.back:hover { color:var(--fg); }
+</style>
+</head>
+<body>
+<a class="back" href="/">← 返回任务列表</a>
+<h1>新建批量任务</h1>
+<div class="card">
+  <label for="targets">目标列表（每行一个 URL 或域名）</label>
+  <textarea id="targets" placeholder="https://example.com&#10;https://api.example.org&#10;shop.example.net"></textarea>
+
+  <label class="auth warn">
+    <input type="checkbox" id="authorized">
+    我已确认：以下目标均已获得明确授权测试（批量自主扫描，授权责任由提交方承担）
+  </label>
+
+  <button class="btn" id="go" onclick="submit()">开始批量渗透</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<script>
+async function submit() {
+  const targets = document.getElementById("targets").value
+    .split("\n").map(s => s.trim()).filter(Boolean);
+  const authorized = document.getElementById("authorized").checked;
+  const msg = document.getElementById("msg");
+  const btn = document.getElementById("go");
+
+  if (!targets.length) { msg.textContent = "请先输入目标"; msg.className = "msg err"; return; }
+  if (!authorized) { msg.textContent = "必须勾选授权确认才能开始"; msg.className = "msg err"; return; }
+
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/targets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targets, authorized: true }),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      msg.textContent = data.message + " → 返回列表查看实时状态";
+      msg.className = "msg ok";
+      document.getElementById("targets").value = "";
+      document.getElementById("authorized").checked = false;
+      setTimeout(() => location.href = "/", 1200);
+    } else {
+      msg.textContent = data.message || "提交失败";
+      msg.className = "msg err";
+    }
+  } catch (e) {
+    msg.textContent = "请求失败: " + e.message;
+    msg.className = "msg err";
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

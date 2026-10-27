@@ -42,7 +42,7 @@ cp .claude/settings.example.json .claude/settings.local.json
 ### 3. 验证安装
 
 ```bash
-# 跑回归测试（25 个用例，覆盖解析/投影/记账/证据绑定契约）
+# 跑回归测试（586 个用例 + 46 个子用例，覆盖解析/投影/记账/证据绑定/认领/图往返）
 python -m pytest tests/ -q
 ```
 
@@ -55,7 +55,7 @@ claude
 #   测试 https://example.com/ 这个站点
 ```
 
-Agent 启动时 hooks 注入结论账本投影（`[WORLD MODEL]` / `[HYPOTHESES]` / `[RESUME]` 等），探索中通过 `merge.py` 合并记账，下次会话开始投影最新账本。产物落在 `results/<target>/`。
+Agent 启动时 hooks 注入结论账本投影（`[TERRAIN]` / `[FRONTIER]` / `[EXCLUDED]` / `[WORLD MODEL]` / `[UNEXPLAINED]` 等，顺序即注意力顺序：先形状 → 该做什么 → 别做什么 → 定局质量），探索中通过 `merge.py` 合并记账，下次会话开始投影最新账本。产物落在 `results/<target>/`。
 
 > **注意：** 测试前确认目标已获授权；`results/`、`.claude/memory.md`、`settings.local.json` 均不入库。
 
@@ -124,9 +124,9 @@ Agent 启动时 hooks 注入结论账本投影（`[WORLD MODEL]` / `[HYPOTHESES]
 
 - **`CLAUDE.md`**：给渗透 Agent 的短合同——工具怎么敲、账怎么记、完成边界、报告槽位。要短、可执行。
 - **`cognition/*.md`**：推理镜头（对象 / 证据 / 实验 / 表面错位），**不是**领域操作手册。  
-  会话开始时 **按固定顺序原样拼接**，Runtime **不**根据目标选型或解释内容。
+  由 `CLAUDE.md` 末尾的 `@cognition/*.md` 强制导入，随 system prompt 注入；Runtime 不按目标选型或解释内容。
 
-人 / 维护者读的边界说明在 **`ARCHITECTURE.md`**、**`MAINTAINER.md`**，不要和 Agent 热路径混读。
+人 / 维护者读的边界说明在 **`ARCHITECTURE.md`**，不要和 Agent 热路径混读。
 
 ### 知识（Knowledge）
 
@@ -140,11 +140,12 @@ Agent 启动时 hooks 注入结论账本投影（`[WORLD MODEL]` / `[HYPOTHESES]
 
 | 文件 | 状态 | 含义 |
 |------|------|------|
-| `false_closures.md` | 失败先验库 | 冷知识；「你默认 / 实际 / 还不知道」。**不**被 hook 加载全文 |
-| `bounty_criteria.md` | 报告过滤 | 写 `report.md` 时按需阅读；冷，不进会话开始 |
-| `*_objects.md` 等 | **冻结 / 非运行时** | 领域切分标本；不路由、不按技术栈点菜、不进会话开始 |
+| `bounty_criteria.md` | 报告过滤 | 写 `report.md` 前**必须**阅读；冷，不进会话开始 |
+| `report_spec.md` | 报告格式 | 同一次阅读的第二件事（一洞一节 / 每步附可回放的原始请求包 / 证据绑定 / 收口自检清单）；冷，不进会话开始 |
 
-热路径里与「压缩纪律」相关的，是会话开始固定 **6 行** 反压缩短句，**不是**把 `knowledge/` 整目录热起来。
+热路径里与「压缩纪律」相关的，是会话开始固定 **7 行** 反压缩短句（硬编码在 `runtime/project.py`），**不是**把 `knowledge/` 整目录热起来。
+
+`false_closures.md` 与 `*_objects.md` 已删：前者价值已兑现进那 7 行（正文跨全部会话 0 读取），后者跨全部会话仅 1 次读取，且两者零代码引用、无强制 Read 点（见 `ARCHITECTURE.md`）。
 
 ### 运行时（Runtime）
 
@@ -185,25 +186,22 @@ xiangxiong/
 ├── README.md                 # 本文件（人）
 ├── LICENSE                   # MIT
 ├── ARCHITECTURE.md           # 开发者边界（人）
-├── MAINTAINER.md             # 维护纪律（人）
 ├── .claude/                  # settings.example.json；local/memory 不入库
-├── cognition/                # 推理镜头（会话开始固定加载）
+├── cognition/                # 推理镜头（经 CLAUDE.md 强制加载）
 │   ├── object_model.md
 │   ├── evidence_model.md
 │   ├── experiment_model.md
 │   └── surface_misalignment.md
-├── knowledge/                # 冷先验 / 标本（默认不进 hook）
-│   ├── false_closures.md
-│   ├── bounty_criteria.md
-│   ├── auth_objects.md
-│   ├── frontend_objects.md
-│   ├── springboot_objects.md
-│   └── cloud_metadata.md
+├── knowledge/                # 冷知识（默认不进 hook）
+│   ├── bounty_criteria.md    #   报告过滤（进/不进 report）
+│   └── report_spec.md        #   报告格式（收口时与上者一起 Read）
 ├── runtime/                  # 工具与状态机
 │   ├── http_request.py
 │   ├── execute.py
 │   ├── experiment.py
 │   ├── merge.py
+│   ├── digest.py             #   决策摘要（[GOAL]+[NEXT]）——投影与记账后回吐共用
+│   ├── filelock.py           #   跨进程锁（请求号 / 实验号 / memory 事务）
 │   └── …
 ├── scripts/                  # hooks + 验证工具
 │   ├── session_start.py      # SessionStart 单次投影
@@ -223,17 +221,51 @@ xiangxiong/
 
 ### 2. 会话开始（`scripts/session_start.py`）
 
-每个会话开始时注入（顺序以脚本为准）：
+每个会话开始时注入（顺序以脚本为准）：**只注入动态世界状态**。
 
 | 段 | 作用 |
 |----|------|
-| `[COGNITION]` | 固定四个 cognition 文件；单文件 / 总长有上限 |
-| `[ANTI-COMPRESSION]` | **固定 6 行**（见下）；**不**读 `false_closures.md` |
-| `[WORLD MODEL]` | 结论账本（vuln / hypothesis / counter / dead + 证据编号） |
-| `[OPEN EXPERIMENTS]` | 当前 target 未关闭实验状态（id / observations / artifacts / hypothesis）；纯展示，不提醒关闭 |
-| `[RECENT EXPERIMENTS]` | 当前目标最近实验摘要 |
-| `[RESUME]` | **是否具备恢复上下文的投影资格**（有目标且账本非空）——**不是**「继续 / 停止」判决 |
-| `[ARTIFACTS]` | 磁盘上是否有 `report.md` / `lessons.md` |
+| `[GOAL]` | 搜索的终止条件与阶段里程碑（`goal:` / `subgoal:`）。**首段**——其余每段回答"怎么走"，只有它回答"去哪"；未声明时会给出可抄的写法 |
+| `[TERRAIN]` | 形状计数（各 kind 数量 / edge 各状态）。**首段判据**，先看形状再看细节 |
+| `[FINDINGS]` | 交付物（`vuln:`）。与 `[GOAL]` 构成唯一一对读数量：要什么 / 拿到了什么 |
+| `[NEXT]` | **此刻可做的事**，每条一行、可直接复制。排序照抄 Cairn 的 dispatcher（最新未认领优先），排除 `[blocked]` 与已闭合项；无可派项时说明原因并指向扩未知的方向 |
+| `[FRONTIER]` | 未闭合假设 + `future:` 声明的下一步，每条带稳定 ID（`h:`/`f:`）供派发/认领；**段头带一条可复制的 `Agent(subagent_type="deepdive", …)`** |
+| `[SWEEP]` | 批量机械验证类工作（`hypothesis [sweep]:`：枚举/爆破/限流/逐条比对）。**待派队列**，默认派子 agent |
+| `[EXCLUDED]` | 排除集（counter / dead）。最省时间的一类信息 |
+| `[WORLD MODEL]` | 结论账本（surface / cred / vuln + tech / port / artifact/tech 约束） |
+| `[UNEXPLAINED]` | 锚点未被任何假设提及的观察（上限 10 条） |
+| `[COVERAGE]` | 请求数 / 去重路径 / 只探过一次的路径（广度缺口） |
+| `[DIFFS]` | 机械差分候选（状态码差异 / 体长差异） |
+| `[RECENT EXPERIMENTS]` / `[OPEN EXPERIMENTS]` | 当前 target 的实验状态 |
+| `[SETTLED]` | 已闭合假设（confirmed / contradicted） |
+| `[ARTIFACTS]` | `report.md` / `lessons.md` 的存在性（present/absent）。**元数据，不是完成判据** —— 停不停是 Agent 的事 |
+
+静态宪法（`[COGNITION]` 四个认知模型 + `[ANTI-COMPRESSION]` 七行）**已移出 hook**，
+改由 `CLAUDE.md` 末尾的 `@cognition/*.md` 导入，随 system prompt 注入——原因见下。
+
+#### 投影预算：为什么投影必须自限
+
+宿主对 SessionStart hook 的 `additionalContext` 有**硬上限**（claude-code 2.1.x
+为 10,000 字符）：超出就不再注入原文，只注入**前 2,000 字符预览**。
+
+2026-09-17 首次真实执行即踩中：投影 10,408 字符 → 预览里全是排在最前的
+`[COGNITION]` → agent 开局看不到 `[TERRAIN]`/`[FRONTIER]`/`[EXCLUDED]`/`[WORLD MODEL]`
+→ 没有可认领项 → 认领 / 实验 / 深挖全部归零。
+
+对策两条，缺一不可：
+
+1. **静态与动态分流**：会话不变量进 `CLAUDE.md`；hook 只装动态世界状态。
+
+   > **`CLAUDE.md` 没有"上限"这种东西。** 宿主 `src/utils/claudemd.ts` 的
+   > `MAX_MEMORY_CHARACTER_COUNT = 40000`，注释写明是 **"Recommended"**；它只被
+   > `/doctor` 的 context warning（`severity: 'warning'`）和状态栏提示引用，
+   > **不截断、不替换**——超了照样全文注入，只是弹一句"will impact performance"。
+   > 真正会静默丢内容的只有 `@include` 的几条规则：最大嵌套深度 `MAX_INCLUDE_DEPTH = 5`、
+   > 非文本扩展名跳过、项目外 include 未批准则跳过、`claudeMdExcludes` 可整份排除。
+   > （另有 AutoMem 的 `MEMORY.md` 入口会被硬截到 200 行 / 25,000 字节，**不适用于 `CLAUDE.md`**。）
+2. **投影自限 `PROJECTION_BUDGET_CHARS = 9000`**：超限按 `SECTION_TRIM_ORDER` 机械裁剪，
+   并**显式写出**丢了几行、全文在哪（`… +N lines dropped by projection budget; full: …`）。
+   裁剪顺序保证 `[TERRAIN]`/`[FRONTIER]`/`[EXCLUDED]` 最后才动——静默丢失比截断更糟。
 
 ### 3. 其它 hooks
 
@@ -245,7 +277,10 @@ v0.3 起**没有** PostToolUse / Stop hook：工具调用后不重投影、不�
 
 ### 4. `knowledge/` 默认不加载
 
-只有主动阅读才会看到正文。定位是「冷标本 / 案例库」，不是每轮菜单。
+只有主动阅读才会看到正文。现存两个文件，都在**收口时**由 CLAUDE.md 强制阅读：
+`bounty_criteria.md`（进/不进 report 的过滤）与 `report_spec.md`（report 的格式与收口自检）。
+它们原先合并挤在 `CLAUDE.md` 里每轮都在场，实测占静态负载 6.4% 却只在写报告那一刻有用
+（长期取舍见 `ARCHITECTURE.md`）。
 
 ---
 
@@ -268,13 +303,14 @@ v0.3 起**没有** PostToolUse / Stop hook：工具调用后不重投影、不�
 
 ### B. 压缩纪律是「曝光」，不是「触发器」
 
-`[ANTI-COMPRESSION]` 六行（脚本里的固定短句，原则不是步骤）：
+`[ANTI-COMPRESSION]` 七行（`CLAUDE.md` 末尾的固定短句，原则不是步骤；2026-09-17 随静态宪法一并移出 hook 注入）：
 
 ```text
 Similar identifier ≠ same object.
 Related behavior ≠ proven shared boundary.
 Successful path ≠ adjacent surface exhausted.
 Missing observation ≠ absence.
+Blocked surface ≠ excluded surface.
 Supported explanations should constrain the next experiment.
 Preserved unknowns do not retain equal priority outside the current explanation boundary.
 ```
@@ -285,8 +321,9 @@ Preserved unknowns do not retain equal priority outside the current explanation 
 2. 相关行为 ≠ 已证明的共同边界  
 3. 某条路径成功 ≠ 邻接面已穷尽  
 4. 缺观察 ≠ 不存在  
-5. 已获支持的解释，应约束下一跳实验  
-6. 解释边界外的未知可以保留，但不应与当前主线等权抢预算  
+5. 被阻塞的面 ≠ 已被排除的面  
+6. 已获支持的解释，应约束下一跳实验  
+7. 解释边界外的未知可以保留，但不应与当前主线等权抢预算  
 
 | 是 | 不是 |
 |----|------|
@@ -310,7 +347,7 @@ Memory 回答 **「当前目标已确认的认知资产」**——结论账本�
 | `hypothesis:`（可选 `[observed\|confirmed\|contradicted\|blocked]`） | 关系 / 未知（带状态） |
 | `counter:` / `dead:` | 反证 / 死路 |
 | `target:` | 身份 |
-| `future:` | 只进 memory，**不投影** |
+| `future:` | 延后动作（非问题）；投影为 `[FRONTIER]` 段的 `next:` |
 
 - 禁止直接改热 memory；走 `echo "DELTA:…" | python runtime/merge.py`。
 - 每条少于 3 行，一次不超过 15 行；有观察 / 冲突 / 结论才写，不是每步填表。
@@ -333,8 +370,10 @@ Memory 回答 **「当前目标已确认的认知资产」**——结论账本�
 |------|------|
 | HTTP | `python runtime/http_request.py <target> <curl 风格参数…>`（禁止裸 curl 当主路径） |
 | 非 HTTP / 脚本 | `python runtime/execute.py <target> --timeout 60 --purpose "…" --cmd "…"`；复杂逻辑先写 `results/<target>/scripts/` |
-| 实验 | `create … --activate --hypothesis "…"`；`close … --status success\|failed\|blocked\|unknown --memory-update '{"text":"探索后的结论","status":"confirmed","evidence":["req_747"]}'`（close 自动写回账本） |
-| Memory | `echo "DELTA:…" \| python runtime/merge.py` |
+| 实验 | `create … --activate --hypothesis "…"`；`close … --status success\|failed\|blocked\|unknown --memory-update-file results/<target>/scripts/_exp_close.json`（JSON 先落盘再传路径，躲开 shell 引号；close 自动写回账本） |
+| Memory | DELTA 先 Write 落盘，再 `python runtime/merge.py --delta-file results/<target>/scripts/_delta.txt`（零转义） |
+
+**不要用 `echo "DELTA:\n…" \| merge.py`**：shell 的 `echo` 不解释 `\n`，整段挤成一行 → **静默记 0 条**（无报错、`exit 0`）。见 `tests/test_cli_ergonomics.py`。
 
 展示截断 ≠ 磁盘全文：以 `results/<target>/responses/` 为准。
 
@@ -350,7 +389,8 @@ Memory 回答 **「当前目标已确认的认知资产」**——结论账本�
 - 分步复现 + **每个 HTTP 步附完整原始请求包**（`METHOD /path HTTP/1.1`+`Host`+Header+空行+Body，可粘 Burp Repeater）/ 响应 + `req_xxx` / 实验编号  
 - 可落地修复  
 
-写报告前问：影响面 + 可利用性够赏金平台收吗？不确定时阅读 `knowledge/bounty_criteria.md`。  
+写报告前**必读** `knowledge/report_spec.md`（格式）与 `knowledge/bounty_criteria.md`（过滤）。
+本节只是摘要，**细则以那两份为准**（含"收口自检"清单）。  
 纯配置 / 指纹 / 无利用链信息泄露 → 可不写报告（memory 已记录）。  
 多洞可同文件；禁止只有摘要表或无证据「可能」。
 
@@ -373,6 +413,18 @@ hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对�
 ---
 
 ## 更新日志
+
+### v0.3.2（2026-10）
+
+**前沿显式化 + 类型化图 + 邻域切片**
+
+- **[FRONTIER]/[SETTLED] 拆分**：hypothesis 按状态分段展示，行带稳定 ID（`h:xxxxxx`）；补证据或升级状态不改号。
+- **前沿认领协议**：意图 ID 原子分配 + claim/lease 续约，派发由前沿项驱动，避免同一假设被重复探索。
+- **类型化节点图**：`graph.py` 支持 11 种 kind，`render(parse(x)) == x` 逐字节无损往返。
+- **邻域切片**：`deepdive.py` 按意图锚点裁剪上下文，探索者只读自己的邻域。
+- **聚合投影**：judge 侧按端点/对象聚合，注意力顺序重排；大账本按预算裁剪。
+- **内网与证据模块**：`scope.py` 双层授权闸、`credentials.py` 引用式凭据、`intranet_scan.py` 地形聚合、`evidence.py` / `digest.py` / `turn_state.py`。
+- **安全与回归**：证据闸、凭据闸、inline/memory guard 均有回归锁；全量测试 586 passed + 46 subtests。
 
 ### v0.3.1（2026-08）
 
@@ -406,7 +458,7 @@ hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对�
 
 **Object-Centered projection 一致性修复**
 
-- **投影镜像 world schema**：`HYPOTHESES` 段按 memory 顺序全量展示 hypothesis，state 作为行内属性（`observed/confirmed/contradicted/blocked/unknown`），不再按 state 值过滤或分组。
+- **投影镜像 world schema**：`hypothesis` 按 memory 顺序展示，state 作为行内属性（`observed/confirmed/contradicted/blocked/unknown`），不按 state 值过滤。v0.3.2 起按 state 拆为 `[FRONTIER]`（未闭合）与 `[SETTLED]`（已闭合）两段——**只是分段显示，不改变任何语义**，每行带稳定 ID（`h:xxxxxx`），补证据或升级状态不改号。
 - **移除 schema 外分类**：删除 `OPEN UNKNOWNS` / `STALLED` 自创桶名与过滤逻辑，消除 projection 对世界状态的解释层。
 - **Contract 边界句收敛**：引导语只保留"来自世界模型，不是任务要求，不是下一步指令"。
 - **回归锁**：新增 state visibility 测试——hypothesis 从 `observed` 转移至 `confirmed/contradicted` 后仍必须可见，防未来再次丢失 state（65 tests passed）。
@@ -426,7 +478,7 @@ hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对�
 | 读者 | 读什么 |
 |------|--------|
 | 渗透 Agent | `CLAUDE.md`、会话开始投影、cognition |
-| 人 / 维护 | 本 README、`ARCHITECTURE.md`、`MAINTAINER.md` |
+| 人 / 维护 | 本 README、`ARCHITECTURE.md` |
 | 冷先验正文 | `knowledge/*`（不自动进会话） |
 | 单场事实 | `results/<target>/`（本地） |
 

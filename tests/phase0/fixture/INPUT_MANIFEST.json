@@ -4,7 +4,7 @@
   "purpose": "migration baseline only; no runtime abstraction",
   "captured_by": "tests/phase0/capture_baseline.py",
   "workspace_layout_note": "session_start and merge resolved paths relative to their script parents; capture ran in an isolated tree mirroring xiangxiong layout",
-  "memory_sha256": "bdd6f4393ee2858d00f3ebc1bfe294d4c5b44cac0bb6bcb2b2642cef38ea5d31",
+  "memory_sha256": "df5296526b6e7fbcb11f68a807497b8404315932ea171295afae6d8ec894d490",
   "observe_state_sha256": "b84e81460066c023e522606db15b01cad4534d21858b0661515cf2832b2e4dcc",
   "cognition_files": [
     "object_model.md",
@@ -13,7 +13,7 @@
     "surface_misalignment.md"
   ],
   "cognition_sha256": {
-    "object_model.md": "587c36b8c1768257eeb9d9007b732cbfe29114b674ec5475d135c304f3d96c42",
+    "object_model.md": "d81a8a5a81f172eca761d23f94e044323dfd221ff8a7cefd82480ca90ef3b1a5",
     "evidence_model.md": "9597ecaa61a82d52e134fcd96a8f922914208605f1cd0f9bce8f0654cdec5bec",
     "experiment_model.md": "3a606df89d6b388c0de89f92d54c3b7210744ce9b82fdb96c7e7f12955863eff",
     "surface_misalignment.md": "a24ba31333a8d7c14034f004664e6bccaf0f3b1cdcecae6e2ed3ca6aa223a93d"
@@ -23,16 +23,20 @@
     "report.md": false,
     "lessons.md": false
   },
-  "expected_stdout_sha256": "64c099361f9cf4c3b66b7ff2c237b5c1fb116c4ee751849e343b832d93e63907",
+  "expected_stdout_sha256": "994bec5a5ce4944b4d306e16f791d01fa643fd1cde3099ad32a439afb8d0d440",
   "section_sha256": {
-    "COGNITION": "16e5aafb7f8afb11feb41876e8e3ead40704dca073f8d763e8e6ff25af24c5b8",
-    "ANTI-COMPRESSION": "552b3c14f250f5d8fbceb6bb44bd42ef31346193d395c0cfa29601b0b7b92e36",
-    "WORLD": "e85015711e806eb2616e6242068485e3d9c438d2f4bfdde8a4e6580ce70ada7b",
-    "RESUME": "32559d9821311d4716b5a15253c1ff1120fcb18cdd9ad0b54fa9832bd9da0244",
-    "ARTIFACTS": "0c69961b665b220d1d676d6b619fa0e278e25347fa9b3cd04256542ca6bed617"
+    "GOAL": "51e4a4657c9467772ae2e1cb0fdc8db5af79969256e372d301ad3d827440ace5",
+    "TERRAIN": "bb26f4272d14aea69e65bef2a42587eedb875dae1400718440702797d5318f32",
+    "FINDINGS": "b58ab240db5012cd49b3e6b32e3c6fa3a9c37a51d5989e029694ce64f8f9e878",
+    "NEXT": "565146fc4841cf6c3d42d8aa5a9dbfcb7423b23c1df7fcdeb977ed9371b58de2",
+    "FRONTIER": "dfd85b581f6cbd4e184c445011f2c0ef51a8803bb4d48ae9bdc43fb416719ac5",
+    "SWEEP": "2986fc3df94e69a4ce9100f3094989a992e678ee4ee27962a9ca07a5e2ac6d48",
+    "EXCLUDED": "cfa699ff1c3b213535fda2497415929cf6fe058930219aad6c025af58a64b003",
+    "WORLD": "bfd3f7d19535042567f9962ea15e162dda1f874875b938087c5e2fd33ccc509c",
+    "ARTIFACTS": "8c110b3d9b837a14aeafaccd9ad1a6e51f8006e386ce2e44629e7697bf0fb48d"
   },
-  "merge_memory_before_sha256": "bdd6f4393ee2858d00f3ebc1bfe294d4c5b44cac0bb6bcb2b2642cef38ea5d31",
-  "merge_memory_after_sha256": "1b38225a0d9cf71f819c0785f7e5e2a94a8452939497d66285deb6f0f991e593",
+  "merge_memory_before_sha256": "df5296526b6e7fbcb11f68a807497b8404315932ea171295afae6d8ec894d490",
+  "merge_memory_after_sha256": "6ad1e199b6cdac29a27d1159647bbad7a8a67cde2b7b6e008f678cbc449015bf",
   "merge_delta_sha256": "a2884762074d8e57d10d8ce7bd0d2b4ccb0e330287b5c9900d6866f5db4c8733",
   "python": "3.13.7",
   "platform": "win32"

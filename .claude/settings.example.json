@@ -6,7 +6,10 @@
   "permissions": {
     "allow": [
       "Bash(*)",
+      "PowerShell(*)",
       "Powershell(*)",
+      "Agent",
+      "Task",
       "WebSearch",
       "Read(*)",
       "Grep(*)",
@@ -18,11 +21,31 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
             "command": "python scripts/memory_guard.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/inline_guard.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/ask_user_denied.py",
             "timeout": 5
           }
         ]

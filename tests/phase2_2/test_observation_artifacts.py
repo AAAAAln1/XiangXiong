@@ -48,16 +48,14 @@ class TestExecuteObservationArtifacts(unittest.TestCase):
     def test_short_stdout_fields(self):
         body = "hello-short"
         result = execute.build_result(self._args(f'python -c "print({body!r}, end=\\"\\")"'))
-        self.assertIn("stdout_artifact", result)
-        self.assertIn("stderr_artifact", result)
-        self.assertEqual(result["stdout_size"], len(body) + 0)  # print may add nothing with end=
-        # robust: size matches full file
-        full_path = Path(self._tmp) / "t.example" / result["stdout_artifact"].replace("/", os.sep)
-        raw = full_path.read_text(encoding="utf-8")
-        self.assertEqual(result["stdout_size"], len(raw))
-        self.assertFalse(result["stdout_truncated"])
-        self.assertFalse(result["stderr_truncated"])
-        self.assertEqual(result["stdout"], raw)
+        self.assertIn("metadata", result)
+        self.assertEqual(result["stdout"], body)
+        # 一阶：不读 metadata 也有 stdout 文本；全文路径在 metadata.json 的 artifacts
+        meta_path = Path(self._tmp) / "t.example" / result["metadata"].replace("/", os.sep)
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        self.assertEqual(meta["artifacts"]["stdout"].split("/")[-1], f"{result['execution_id']}.stdout.txt")
+        full_path = Path(self._tmp) / "t.example" / meta["artifacts"]["stdout"].replace("/", os.sep)
+        self.assertEqual(full_path.read_text(encoding="utf-8"), body)
         self.assertTrue(full_path.is_file())
         blob = json.dumps(result, ensure_ascii=False)
         for bad in FORBIDDEN_SUBSTR:
@@ -70,14 +68,18 @@ class TestExecuteObservationArtifacts(unittest.TestCase):
             f'python -c "import sys; sys.stdout.write(\'x\'*{n})"'
         )
         result = execute.build_result(self._args(cmd))
-        self.assertTrue(result["stdout_truncated"])
-        self.assertEqual(result["stdout_size"], n)
-        self.assertEqual(len(result["stdout"].split("\n...[truncated")[0]), execute.MAX_OUTPUT_CHARS)
-        full_path = Path(self._tmp) / "t.example" / result["stdout_artifact"].replace("/", os.sep)
-        self.assertEqual(len(full_path.read_text(encoding="utf-8")), n)
-        # 一阶：不读 metadata 也有 path
-        self.assertTrue(result["stdout_artifact"].endswith(".stdout.txt"))
-        self.assertNotEqual(result["stdout_artifact"], result["metadata"])
+        # 2026-10-06 P1-a：裁剪改 head/tail（渗透结论常在尾部）+ 全文路径
+        self.assertIn("头 2048 + 尾 2048", result["stdout"])
+        self.assertIn(str(n), result["stdout"])  # 总长度披露
+        self.assertIn(".stdout.txt", result["stdout"])  # 全文路径在回显内
+        self.assertLessEqual(len(result["stdout"]), execute.MAX_OUTPUT_CHARS + 200)
+        meta_path = Path(self._tmp) / "t.example" / result["metadata"].replace("/", os.sep)
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        full_path = Path(self._tmp) / "t.example" / meta["artifacts"]["stdout"].replace("/", os.sep)
+        self.assertEqual(len(full_path.read_text(encoding="utf-8")), n)  # 全文未截断
+        # 一阶：不读 metadata 也有 truncation 提示；全文路径在 metadata
+        self.assertTrue(meta["artifacts"]["stdout"].endswith(".stdout.txt"))
+        self.assertNotEqual(meta["artifacts"]["stdout"], result["metadata"])
 
 
 class TestHttpObservationArtifacts(unittest.TestCase):
@@ -96,10 +98,10 @@ class TestHttpObservationArtifacts(unittest.TestCase):
             "truncated": False,
         }
         text = http_request.format_output(base)
-        self.assertIn("body_artifact: responses/req_001.txt", text)
-        self.assertIn("body_size: 100", text)
-        self.assertIn("body_truncated: false", text)
         self.assertIn("saved: responses/req_001.txt", text)
+        self.assertIn("length: 100 bytes", text)
+        self.assertNotIn("body_truncated", text)
+        self.assertNotIn("(截断到", text)
 
     def test_format_truncated_true(self):
         base = {
@@ -116,10 +118,9 @@ class TestHttpObservationArtifacts(unittest.TestCase):
             "truncated": True,
         }
         text = http_request.format_output(base)
-        self.assertIn("body_truncated: true", text)
-        self.assertIn("body_artifact: responses/req_002.txt", text)
-        self.assertIn("full=responses/req_002.txt", text)
-        self.assertIn(f"size=9999", text)
+        self.assertIn("saved: responses/req_002.txt", text)
+        self.assertIn("(截断到 2048 字符", text)
+        self.assertIn("length: 9999 bytes", text)
         for bad in FORBIDDEN_SUBSTR:
             self.assertNotIn(bad, text)
 

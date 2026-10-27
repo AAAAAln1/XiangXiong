@@ -20,7 +20,8 @@ COGNITION = (
     "experiment_model.md",
     "surface_misalignment.md",
 )
-RUNTIME_FILES = ("paths.py", "world.py", "project.py", "merge.py")
+RUNTIME_FILES = ("paths.py", "world.py", "graph.py", "digest.py", "filelock.py",
+                 "turn_state.py", "project.py", "merge.py")
 
 
 def _build_ws(tmp: Path) -> Path:
@@ -54,7 +55,8 @@ class TestAdapterOnly(unittest.TestCase):
             r"WORLD MODEL",
             r"ANTI-COMPRESSION",
             r"OPEN UNKNOWNS",
-            r"HYPOTHESES",
+            r"FRONTIER",
+            r"SETTLED",
             r"load_cognition",
             r"render_cognition",
             r"load_recent_experiments",

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>象雄批量渗透 · 任务列表</title>
+<style>
+:root { --bg:#0d1117; --card:#161b22; --border:#30363d; --fg:#c9d1d9; --accent:#58a6ff;
+        --green:#3fb950; --yellow:#d29922; --red:#f85149; --muted:#8b949e; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); color:var(--fg); font-family:"Segoe UI","Microsoft YaHei",monospace; padding:24px; }
+h1 { font-size:20px; margin-bottom:16px; }
+h1 a { color:var(--fg); text-decoration:none; }
+.top { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.btn { background:var(--accent); color:#000; border:none; padding:8px 16px; border-radius:6px;
+       font-size:14px; cursor:pointer; font-weight:600; text-decoration:none; }
+.btn:hover { opacity:0.85; }
+.summary { color:var(--muted); font-size:13px; margin-bottom:12px; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:8px;
+        padding:14px 16px; margin-bottom:10px; }
+.card .head { display:flex; justify-content:space-between; align-items:center; }
+.card .host { font-size:15px; font-weight:600; }
+.badge { font-size:12px; padding:2px 10px; border-radius:12px; font-weight:600; }
+.b-pending { background:#21262d; color:var(--muted); }
+.b-running { background:#1f3a5f; color:var(--accent); }
+.b-done { background:#1c3a24; color:var(--green); }
+.b-timeout { background:#3d2e13; color:var(--yellow); }
+.b-failed { background:#3d1d1d; color:var(--red); }
+.meta { margin-top:8px; color:var(--muted); font-size:13px; }
+.meta span { margin-right:14px; }
+.report-link { margin-left:8px; color:var(--accent); text-decoration:none; }
+.report-link:hover { text-decoration:underline; }
+.val-ok { color:var(--green); }
+.val-bad { color:var(--yellow); }
+.err { color:var(--red); margin-top:6px; font-size:13px; }
+</style>
+</head>
+<body>
+<h1>象雄批量渗透调度器</h1>
+<div class="top">
+  <div class="summary" id="summary">加载中…</div>
+  <a class="btn" href="/new.html">+ 新建任务</a>
+</div>
+<div id="list"></div>
+
+<script>
+async function poll() {
+  try {
+    const r = await fetch("/api/status");
+    const data = await r.json();
+    const targets = data.targets || {};
+    const hosts = Object.keys(targets);
+    const running = hosts.filter(h => targets[h].status === "running").length;
+    document.getElementById("summary").textContent =
+      `队列 ${data.queue_len} | 运行中 ${running} | 共 ${hosts.length} 目标`;
+    render(targets);
+  } catch (e) {
+    document.getElementById("summary").textContent = "连接失败: " + e.message;
+  }
+}
+
+function render(targets) {
+  const hosts = Object.keys(targets).sort((a,b) =>
+    (targets[b].updated_at || "").localeCompare(targets[a].updated_at || ""));
+  const el = document.getElementById("list");
+  el.innerHTML = "";
+  for (const h of hosts) {
+    const t = targets[h];
+    const st = t.status;
+    const badge = `<span class="badge b-${st}">${st}</span>`;
+    let meta = "";
+    if (t.started_at) meta += `<span>开始 ${t.started_at}</span>`;
+    if (t.duration_s != null) meta += `<span>耗时 ${t.duration_s}s</span>`;
+    if (t.report_validation) {
+      const ok = t.report_validation === "ok";
+      meta += `<span class="${ok ? "val-ok" : "val-bad"}">报告校验: ${t.report_validation}</span>`;
+    }
+    let reportLink = "";
+    if (st === "done" || st === "timeout" || st === "failed") {
+      reportLink = `<a class="report-link" href="/report.html?host=${encodeURIComponent(h)}">查看报告 →</a>`;
+    }
+    const err = t.error ? `<div class="err">⚠ ${t.error}</div>` : "";
+    el.innerHTML += `
+      <div class="card">
+        <div class="head">
+          <span class="host">${h}</span>
+          ${badge}
+        </div>
+        <div class="meta">${meta}${reportLink}</div>
+        ${err}
+      </div>`;
+  }
+}
+
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>

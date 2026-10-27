@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>象雄批量渗透 · 报告</title>
+<style>
+:root { --bg:#0d1117; --card:#161b22; --border:#30363d; --fg:#c9d1d9; --accent:#58a6ff;
+        --muted:#8b949e; --green:#3fb950; --red:#f85149; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); color:var(--fg); font-family:"Segoe UI","Microsoft YaHei",monospace; padding:24px; }
+h1 { font-size:20px; margin-bottom:6px; }
+h1 a { color:var(--fg); text-decoration:none; }
+.back { display:inline-block; margin-bottom:14px; color:var(--muted); text-decoration:none; font-size:14px; }
+.back:hover { color:var(--fg); }
+.sub { color:var(--muted); font-size:13px; margin-bottom:16px; }
+.split { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+@media (max-width:900px){ .split { grid-template-columns: 1fr; } }
+.panel { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px; }
+.panel h2 { font-size:15px; margin-bottom:12px; }
+#report { white-space:pre-wrap; font-size:13px; line-height:1.6; max-height:80vh; overflow-y:auto; }
+#report h1,#report h2,#report h3 { color:var(--accent); margin:14px 0 6px; font-weight:600; }
+#report h1 { font-size:17px; } #report h2 { font-size:15px; } #report h3 { font-size:14px; }
+#report hr { border:none; border-top:1px solid var(--border); margin:12px 0; }
+#report code { background:#0d1117; padding:1px 5px; border-radius:4px; color:var(--green); }
+#report pre { background:#0d1117; border:1px solid var(--border); border-radius:6px; padding:10px;
+              overflow-x:auto; margin:8px 0; }
+#report pre code { background:none; padding:0; }
+#report li { margin:2px 0 2px 18px; }
+#report table { border-collapse:collapse; margin:8px 0; }
+#report th,#report td { border:1px solid var(--border); padding:4px 10px; font-size:12px; }
+#events { max-height:60vh; overflow-y:auto; font-size:12px; line-height:1.7; }
+#events .ev { border-bottom:1px solid #21262d; padding:4px 0; }
+#events .t { color:var(--muted); }
+#events .tool { color:var(--accent); }
+#events .raw { color:var(--muted); }
+.empty { color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<a class="back" href="/">← 返回任务列表</a>
+<h1 id="title">报告</h1>
+<div class="sub" id="sub"></div>
+<div class="split">
+  <div class="panel">
+    <h2>漏洞报告 (report.md)</h2>
+    <div id="report" class="empty">加载中…</div>
+  </div>
+  <div class="panel">
+    <h2>实时活动流</h2>
+    <div id="events" class="empty">加载中…</div>
+  </div>
+</div>
+
+<script>
+const host = new URLSearchParams(location.search).get("host") || "";
+document.getElementById("title").textContent = `报告 · ${host}`;
+
+// ---- 轻量 markdown 渲染（自写，零依赖）----
+function esc(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function mdRender(src) {
+  if (!src) return '<div class="empty">（暂无内容）</div>';
+  const lines = src.split("\n");
+  let html = "", inCode = false, codeBuf = [];
+  const closeCode = () => {
+    if (inCode) { html += "<pre><code>" + esc(codeBuf.join("\n")) + "</code></pre>"; codeBuf = []; inCode = false; }
+  };
+  for (const line of lines) {
+    if (/^```/.test(line)) {
+      closeCode(); inCode = !inCode; continue;
+    }
+    if (inCode) { codeBuf.push(line); continue; }
+    const h = line.match(/^(#{1,3})\s+(.*)$/);
+    if (h) { const lv = h[1].length; html += `<h${lv}>${esc(h[2])}</h${lv}>`; continue; }
+    if (/^\s*([-*])\s+/.test(line)) { html += `<li>${esc(line.replace(/^\s*[-*]\s+/, ""))}</li>`; continue; }
+    if (/^\s*\|/.test(line)) { html += `<div class="raw">${esc(line)}</div>`; continue; }
+    if (/^---+\s*$/.test(line)) { html += "<hr>"; continue; }
+    if (/^\s*$/.test(line)) { html += "<br>"; continue; }
+    // 行内 code / 粗体
+    let t = esc(line);
+    t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+    t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+    html += `<div>${t}</div>`;
+  }
+  closeCode();
+  return html;
+}
+
+async function loadReport() {
+  try {
+    const r = await fetch(`/api/target/${encodeURIComponent(host)}/report`);
+    const data = await r.json();
+    document.getElementById("report").innerHTML = data.exists
+      ? mdRender(data.text)
+      : '<div class="empty">report.md 尚未生成（agent 仍在工作或未产出报告）</div>';
+  } catch (e) {
+    document.getElementById("report").innerHTML = '<div class="empty">加载失败: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function loadEvents() {
+  try {
+    const r = await fetch(`/api/target/${encodeURIComponent(host)}/events`);
+    const data = await r.json();
+    const el = document.getElementById("events");
+    const evs = data.events || [];
+    el.innerHTML = evs.length
+      ? evs.map(e => renderEvent(e)).join("")
+      : '<div class="empty">暂无事件（agent 尚未发包）</div>';
+    el.scrollTop = el.scrollHeight;
+  } catch (e) { /* ignore transient */ }
+}
+
+function renderEvent(e) {
+  if (e.type === "raw") return `<div class="ev raw">${esc(e.text)}</div>`;
+  const t = e.timestamp || e.session_id || "";
+  if (e.type === "assistant") {
+    const c = (e.message && e.message.content) || [];
+    const text = c.map(x => x.type === "text" ? x.text : "").join("").trim();
+    if (!text) return "";
+    return `<div class="ev"><span class="t">[${esc(t)}]</span> ${esc(text.slice(0, 300))}</div>`;
+  }
+  if (e.type === "tool_use") {
+    const name = e.name || "tool";
+    const input = e.input || {};
+    let url = "";
+    if (input.command) url = (input.command.match(/(?:http_request\.py\s+\S+\s+|https?:\/\/\S+)/) || [""])[0];
+    if (input.url) url = input.url;
+    return `<div class="ev"><span class="tool">[${esc(name)}]</span> ${esc((url || JSON.stringify(input)).slice(0, 200))}</div>`;
+  }
+  if (e.type === "result" || e.type === "system") {
+    const txt = (e.subtype || e.type) + " " + (e.is_error ? "(error)" : "");
+    return `<div class="ev"><span class="t">[${esc(t)}]</span> ${esc(txt)}</div>`;
+  }
+  const txt = JSON.stringify(e);
+  return txt.length < 200 ? `<div class="ev raw">${esc(txt)}</div>` : "";
+}
+
+loadReport();
+loadEvents();
+setInterval(loadEvents, 2000);
+</script>
+</body>
+</html>

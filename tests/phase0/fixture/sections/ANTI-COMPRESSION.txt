@@ -1,8 +1,0 @@
-[ANTI-COMPRESSION]
-- Similar identifier ≠ same object.
-- Related behavior ≠ proven shared boundary.
-- Successful path ≠ adjacent surface exhausted.
-- Missing observation ≠ absence.
-- Supported explanations should constrain the next experiment.
-- Preserved unknowns do not retain equal priority outside the current explanation boundary.
-
