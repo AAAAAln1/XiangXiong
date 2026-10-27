@@ -120,6 +120,10 @@ Agent 启动时 hooks 注入结论账本投影（`[TERRAIN]` / `[FRONTIER]` / `[
 产物 Artifacts    ← results/
 ```
 
+![架构总览：Runtime 感知世界，LLM 构建世界](assets/architecture-overview.png)
+
+读图要点：LLM 只输出（DELTA / 实验结论），从不直接写 memory；Runtime 零判断（观察 → 整理 → 展示）；`memory.md` 是唯一世界状态，唯一写入口是 `merge.py` / `experiment.py`；投影是认知接口（SessionStart 注入一次，9000 字符自限）。**整个工程只有四层，不允许出现第五层。**
+
 ### 契约（Contract）
 
 - **`CLAUDE.md`**：给渗透 Agent 的短合同——工具怎么敲、账怎么记、完成边界、报告槽位。要短、可执行。
@@ -182,38 +186,65 @@ Agent 启动时 hooks 注入结论账本投影（`[TERRAIN]` / `[FRONTIER]` / `[
 
 ```text
 xiangxiong/
-├── CLAUDE.md                 # Agent 合同（热）
+├── CLAUDE.md                 # Agent 合同（热路径；cognition 经 @include 随 system prompt 注入）
 ├── README.md                 # 本文件（人）
-├── LICENSE                   # MIT
 ├── ARCHITECTURE.md           # 开发者边界（人）
-├── .claude/                  # settings.example.json；local/memory 不入库
-├── cognition/                # 推理镜头（经 CLAUDE.md 强制加载）
-│   ├── object_model.md
-│   ├── evidence_model.md
-│   ├── experiment_model.md
+├── LICENSE                   # MIT
+├── .claude/
+│   ├── settings.example.json #   hooks 模板（settings.local.json / memory.md 不入库）
+│   └── agents/deepdive.md    #   deepdive 子 agent 定义（隔离上下文，只返回 JSON）
+├── cognition/                # 推理镜头（CLAUDE.md 末尾 @ 强制加载）
+│   ├── object_model.md       #   对象图：同一失败机制 = 同一对象
+│   ├── evidence_model.md     #   结论必须可追溯
+│   ├── experiment_model.md   #   可差分实验是一等产物
 │   └── surface_misalignment.md
-├── knowledge/                # 冷知识（默认不进 hook）
+├── knowledge/                # 冷知识（收口时强制 Read，不进热路径）
 │   ├── bounty_criteria.md    #   报告过滤（进/不进 report）
-│   └── report_spec.md        #   报告格式（收口时与上者一起 Read）
-├── runtime/                  # 工具与状态机
-│   ├── http_request.py
-│   ├── execute.py
-│   ├── experiment.py
-│   ├── merge.py
-│   ├── digest.py             #   决策摘要（[GOAL]+[NEXT]）——投影与记账后回吐共用
+│   ├── report_spec.md        #   报告格式 + 收口自检清单
+│   └── intranet_tools.md     #   内网工具参数合同（首次使用前读）
+├── runtime/                  # 工具与状态机（22 模块，纯标准库 ~8.1k 行）
+│   ├── http_request.py       #   HTTP 主路径：--sweep/--batch/--cred/--session；证据强制落盘
+│   ├── execute.py            #   非 HTTP 受控执行：--background / exec-NNN / --bg-wait
+│   ├── experiment.py         #   实验槽：create --activate --worker；close 机械写回账本
+│   ├── merge.py              #   唯一写入口：DELTA 事务 + 证据闸 + 凭据闸 + 稳定 ID 收口
+│   ├── graph.py              #   类型化节点图：稳定 ID / 锚点 / 邻域 / 逐字节无损往返
+│   ├── world.py              #   行 → WorldView 桶（与 graph 同一输入的两个视图）
+│   ├── project.py            #   SessionStart 投影：16 段装配 + 9000 字符自限
+│   ├── digest.py             #   决策摘要 [GOAL]+[NEXT]（投影与记账回吐共用单一实现）
+│   ├── deepdive.py           #   邻域切片器（派发前机械准备；派发归宿主 Agent 工具）
+│   ├── intents.py            #   前沿认领：O_CREAT|O_EXCL 原子 claim + 900s 租约
+│   ├── evidence.py           #   请求台账：inventory / list / show / grep（只读）
+│   ├── diff_scan.py          #   机械差分候选 → [DIFFS]
+│   ├── protocol_scan.py      #   协议元素聚合（端点/表单/Cookie/指纹）
+│   ├── toolcheck.py          #   [TOOLS] 工具面检查
+│   ├── turn_state.py         #   轮次状态（无工具用轮次 + 证据引用）
+│   ├── scope.py              #   双层授权闸（engagement 模式，越界动作前 REJECT）
+│   ├── credentials.py        #   引用式凭据库（值不进账本/投影）
+│   ├── intranet_scan.py      #   nmap 聚合 → [HOST MAP] + 可抄 surface 行
+│   ├── hook_patterns.py      #   guard 共用正则（单一实现）
 │   ├── filelock.py           #   跨进程锁（请求号 / 实验号 / memory 事务）
-│   └── …
+│   └── paths.py / state.py   #   world 绑定 / runtime.json
 ├── scripts/                  # hooks + 验证工具
-│   ├── session_start.py      # SessionStart 单次投影
-│   ├── memory_guard.py       # 防裸写热 memory
-│   └── validate_persistence.py  # 离线认知持久化验证
-├── resources/                # 中性词表等（非认知层）
+│   ├── session_start.py      #   SessionStart 单次投影入口
+│   ├── memory_guard.py       #   PreToolUse：禁裸写热 memory
+│   ├── inline_guard.py       #   PreToolUse：栏内联脚本
+│   ├── ask_user_denied.py    #   PreToolUse：AskUserQuestion 一律 deny + 替代动作
+│   ├── batch_server.py       #   批量多目标跑批（HTTP 服务）
+│   ├── validate_persistence.py #  离线认知持久化验证
+│   ├── probe_headless.py     #   headless 探针
+│   └── metrics/llm_labor.py  #   LLM 机械劳动度量
+├── resources/wordlists/      # 中性词表（surface 先验，非扫描器大脑）
+├── assets/                   # 架构图（本 README 使用）
 └── results/                  # 按目标的产物（本地，不入库）
 ```
 
 ---
 
 ## 上下文如何加载（Agent 看见什么）
+
+![SessionStart 投影管线：每次会话开场跑一遍](assets/projection-pipeline.png)
+
+管线五步：hook 触发 → 读 `memory.md`（唯一真相源）→ 双视图解析（world 桶 + graph 节点/稳定 ID）→ 16 段装配（冻结序 = 注意力顺序）→ 预算自限注入（≤9000 字符 → stdout）。
 
 ### 1. Claude Code 读 `CLAUDE.md`
 
@@ -340,6 +371,10 @@ Preserved unknowns do not retain equal priority outside the current explanation 
 
 Memory 回答 **「当前目标已确认的认知资产」**——结论账本，不是操作日志、不是环境截图。
 
+![数据模型：一行 memory 的双视图与投影落点](assets/data-model.png)
+
+一行 memory 同时被两个视图解析：`world.py` 给桶（objects / unknowns / constraints / counters），`graph.py` 给类型化节点（kind + 稳定 ID + 锚点），投影决定每行落到哪个段。**稳定 ID = 归一化 claim 文本的 crc32（`graph.node_id` 单一实现）**——补证据、升级状态都不换号，投影 `[NEXT]` 派发、`intents` 认领、deepdive 邻域切片全按它指称。
+
 | 前缀 | 含义 |
 |------|------|
 | `surface:` / `vuln:` / `cred:` | 对象事实 / 已确认漏洞 / 凭据 |
@@ -356,6 +391,10 @@ Memory 回答 **「当前目标已确认的认知资产」**——结论账本�
 **结论 vs 事实**：`surface:` 只记对象存在性 / 技术事实。越权 / 绕过 / 泄露等探索**结论**用 `hypothesis [状态]` / `vuln:` / `counter:` 表达，并带 `req_`/`exp-` 证据编号——结论不带证据或引用不可解析时，merge 会打 WARN / WARN HIGH。
 
 **账本是更新不是追加**：同一 target 内，同文本的 `hypothesis` 行会被**替换**（状态升级，如 `observed` → `confirmed` 带证据），不会重复堆积；不同文本则是新条目。
+
+![写入路径：两个入口、一把锁、一道证据闸](assets/write-path.png)
+
+写路径五步：两个入口（`merge.py` DELTA / `experiment.py close` 机械写回）→ `memory_transaction()` 跨进程锁（O_CREAT|O_EXCL 互斥 + 陈旧锁回收，并发不丢更新）→ `evidence_gate`（只验可追溯不判真假：`confirmed`/`contradicted` 必须带 `exp-NNN`；`vuln`/`counter`/`dead` 引用必须可解析）→ 临界区内一次原子写 → 决策摘要回吐 stderr（仅当 `[GOAL]+[NEXT]` 逐字节变了才打扰）。REJECT 是整行拒绝不连坐——同批其他行照常入账。
 
 错误示例：`surface: 测试了 /admin`  
 正确示例：`hypothesis [confirmed]: 未授权可读他人问卷 (req_747)`
@@ -376,6 +415,17 @@ Memory 回答 **「当前目标已确认的认知资产」**——结论账本�
 **不要用 `echo "DELTA:\n…" \| merge.py`**：shell 的 `echo` 不解释 `\n`，整段挤成一行 → **静默记 0 条**（无报错、`exit 0`）。见 `tests/test_cli_ergonomics.py`。
 
 展示截断 ≠ 磁盘全文：以 `results/<target>/responses/` 为准。
+
+---
+
+## 并行探索：主 agent 是调度者，也是唯一写者
+
+![派发循环：主 agent 是调度者，也是唯一写者](assets/dispatch-loop.png)
+
+- **何时派发**：同一种探测要重复 N 次（枚举 N 个端点/参数/ID、N 变体 fuzz、限流/爆破、逐条契约核对），或单条线的原始输出会淹没主上下文 → 默认派 `deepdive` 子 agent。`[FRONTIER]` / `[SWEEP]` 段头直接给出可复制的调用（`[NEXT]` 段最多 3 条），动作降到「抄一行」。
+- **一条消息发 N 个 `Agent` 调用才是并行**；发完不等，继续发现下一个假设面。
+- 子 agent 一轮：`deepdive.py --intent h:xxxxxx` 拿邻域切片（意图 + 共享锚点行 + 已排除方向，**不读全量 memory**）→ `intents.py claim` 原子认领（O_EXCL + 900s 租约，过期可被抢占）→ `experiment.py create --worker` 开独立实验槽（并行 worker 各一槽，互不踢）→ 差分证据落盘（`req_NNN`/`art-NNN`）→ close（禁 `--memory-update`）→ 只返回 JSON（facts / tested_paths / excluded / stop_reason 必填）。
+- **memory 只有主 agent 写**：收到 JSON 后汇总成一条 DELTA 记账并引用子 agent 的 `exp-NNN`。并行子 agent 同写 memory 会互相覆盖（lost update）——结论经 JSON 回流、单写者合并，是刻意设计。
 
 ---
 
@@ -414,17 +464,29 @@ hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对�
 
 ## 更新日志
 
-### v0.3.2（2026-10）
+### v0.4.0（2026-10）
 
-**前沿显式化 + 类型化图 + 邻域切片**
+**前沿显式化 + 类型化图 + 并行派发 + 内网工具族**
 
-- **[FRONTIER]/[SETTLED] 拆分**：hypothesis 按状态分段展示，行带稳定 ID（`h:xxxxxx`）；补证据或升级状态不改号。
-- **前沿认领协议**：意图 ID 原子分配 + claim/lease 续约，派发由前沿项驱动，避免同一假设被重复探索。
-- **类型化节点图**：`graph.py` 支持 11 种 kind，`render(parse(x)) == x` 逐字节无损往返。
-- **邻域切片**：`deepdive.py` 按意图锚点裁剪上下文，探索者只读自己的邻域。
-- **聚合投影**：judge 侧按端点/对象聚合，注意力顺序重排；大账本按预算裁剪。
-- **内网与证据模块**：`scope.py` 双层授权闸、`credentials.py` 引用式凭据、`intranet_scan.py` 地形聚合、`evidence.py` / `digest.py` / `turn_state.py`。
-- **安全与回归**：证据闸、凭据闸、inline/memory guard 均有回归锁；全量测试 586 passed + 46 subtests。
+认知层语义（解析 / 记账 / 证据闸）零破坏升级；全量回归 **586 passed + 46 subtests**。五张架构图见上文各节（总览 / 投影管线 / 数据模型 / 写入路径 / 派发循环）。
+
+#### 前沿与派发
+- **[FRONTIER]/[SETTLED] 拆分**：hypothesis 按状态分段展示，行带稳定 ID（`h:xxxxxx` = 归一化 claim 文本的 crc32，`graph.node_id` 单一实现）；补证据或升级状态不改号。`[NEXT]` 段直接给出可复制的 `Agent(subagent_type="deepdive", …)` 派发指令（≤3 条），派发动作降到「抄一行」。
+- **前沿认领协议**：`intents.py` —— O_CREAT|O_EXCL 原子认领 + 900s 租约（heartbeat 续约 / 过期可抢占）；并发子 agent 抢同一假设不再重复探索。
+- **类型化节点图**：`graph.py` —— 9 类语义 kind（goal/observation/finding/asset/constraint/evidence/edge/exclusion/intent），`render(parse(x)) == x` 逐字节无损往返；`[TERRAIN]` 形状计数与 `[UNEXPLAINED]`（锚点未被任何假设提及的观察）都从图上机械算出。
+- **邻域切片**：`deepdive.py --intent h:xxxxxx` —— 派发前把「意图 + 共享锚点行 + 已排除方向」裁成独立上下文；探索者不读全量 memory。
+- **聚合投影**：judge 侧按端点/对象聚合 + 注意力顺序重排；投影自限 9000 字符，超限按 `SECTION_TRIM_ORDER` 机械裁剪并显式报数（防宿主 hook 硬上限的静默截断）。
+
+#### 内网与证据工具族
+- `scope.py`：双层授权闸（`scope.json` 声明 + 命令字面量复核），私网目标无授权 → 动作前 REJECT；engagement 模式投影 `[SCOPE]`（授权 / 立足点 / 凭据数 + 授权容量 vs 存活主机）。
+- `credentials.py` + merge 凭据闸：凭据值只落 `results/<t>/credentials/c-NNN.txt`，账本只许写引用；明文口令 / 32/64hex / JWT / PEM 形态一律 REJECT。
+- `intranet_scan.py`：nmap XML/grepable → `[HOST MAP]` + 可抄 `surface:` 行；`protocol_scan.py`：端点/表单/Cookie/指纹机械聚合；`evidence.py`：请求台账 `inventory/list/show/grep`；`dead [filtered|closed|unreachable]:` 三态入账。
+
+#### 写入与守卫
+- 写入双入口（`merge.py --delta-file` / `experiment.py close --memory-update-file`）→ `memory_transaction()` 跨进程锁 → `evidence_gate` → 临界区内原子写 → 决策摘要回吐（仅 `[GOAL]+[NEXT]` 逐字节变化才打印）。
+- guards 三件套：`memory_guard`（禁裸写热 memory）/ `inline_guard`（栏内联脚本）/ `ask_user_denied`（AskUserQuestion 一律 deny + 给替代动作）；STALE CANDIDATE 收口提示 + `[REMOVE]/[UPDATE]` 按稳定 ID 定位。
+- 并行友好：`--worker` 独立实验槽；请求号 / 实验号 / memory 事务均有文件锁，并发不撞号、不丢更新。
+- **干净克隆**：`tests/conftest.py` 自动播种最小本地状态；phase0 金样与全部回归在 fresh clone 上直接全绿。
 
 ### v0.3.1（2026-08）
 
@@ -458,7 +520,7 @@ hooks 由 Claude Code 读取 `.claude/settings.local.json`，模板里是相对�
 
 **Object-Centered projection 一致性修复**
 
-- **投影镜像 world schema**：`hypothesis` 按 memory 顺序展示，state 作为行内属性（`observed/confirmed/contradicted/blocked/unknown`），不按 state 值过滤。v0.3.2 起按 state 拆为 `[FRONTIER]`（未闭合）与 `[SETTLED]`（已闭合）两段——**只是分段显示，不改变任何语义**，每行带稳定 ID（`h:xxxxxx`），补证据或升级状态不改号。
+- **投影镜像 world schema**：`hypothesis` 按 memory 顺序展示，state 作为行内属性（`observed/confirmed/contradicted/blocked/unknown`），不按 state 值过滤。v0.4.0 起按 state 拆为 `[FRONTIER]`（未闭合）与 `[SETTLED]`（已闭合）两段——**只是分段显示，不改变任何语义**，每行带稳定 ID（`h:xxxxxx`），补证据或升级状态不改号。
 - **移除 schema 外分类**：删除 `OPEN UNKNOWNS` / `STALLED` 自创桶名与过滤逻辑，消除 projection 对世界状态的解释层。
 - **Contract 边界句收敛**：引导语只保留"来自世界模型，不是任务要求，不是下一步指令"。
 - **回归锁**：新增 state visibility 测试——hypothesis 从 `observed` 转移至 `confirmed/contradicted` 后仍必须可见，防未来再次丢失 state（65 tests passed）。
